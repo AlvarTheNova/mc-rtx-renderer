@@ -9,7 +9,8 @@
     "MinecraftClientMixin",
     "LevelRendererMixin",
     "GameRendererMixin",
-    "SectionBuilderMixin"
+    "SectionBuilderMixin",
+    "SpriteAtlasMixin"
   ],
   "injectors": {
     "defaultRequire": 1

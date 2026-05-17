@@ -29,6 +29,10 @@ void rtx_upload_chunk(int cx, int cy, int cz,
                       const void* mat_ids,  uint32_t mat_bytes);
 void rtx_remove_chunk(int cx, int cy, int cz);
 
+// Phase 1.4.4: stitched block atlas (RGBA8 row-major).
+void rtx_upload_block_atlas(int width, int height,
+                            const void* pixels, uint32_t byte_count);
+
 // DLSS settings (called from JNI DlssBridge)
 void rtx_set_super_resolution(int preset);
 void rtx_set_ray_reconstruction(int preset);

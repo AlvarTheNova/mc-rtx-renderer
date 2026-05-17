@@ -10,3 +10,10 @@ accessible	field	net/minecraft/client/MinecraftClient	window	Lnet/minecraft/clie
 
 # Camera.getPos() was removed in 1.21.11 — read the field directly instead.
 accessible	field	net/minecraft/client/render/Camera	pos	Lnet/minecraft/util/math/Vec3d;
+
+# Phase 1.4.4: reach atlas internals to extract pixel data for VK upload.
+accessible	field	net/minecraft/client/texture/SpriteAtlasTexture	id	Lnet/minecraft/util/Identifier;
+accessible	field	net/minecraft/client/texture/SpriteAtlasTexture	sprites	Ljava/util/Map;
+accessible	field	net/minecraft/client/texture/SpriteAtlasTexture	width	I
+accessible	field	net/minecraft/client/texture/SpriteAtlasTexture	height	I
+accessible	field	net/minecraft/client/texture/SpriteContents	image	Lnet/minecraft/client/texture/NativeImage;

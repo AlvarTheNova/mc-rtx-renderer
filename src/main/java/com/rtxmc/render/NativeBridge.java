@@ -32,6 +32,9 @@ public final class NativeBridge {
 
     public static native void removeChunk(int chunkX, int chunkY, int chunkZ);
 
+    /** Upload the stitched block atlas. RGBA8 bytes, row-major, width*height*4 bytes. */
+    public static native void uploadBlockAtlas(int width, int height, ByteBuffer pixels);
+
     /** Render one frame using packed params (see VulkanRenderer.frameParams layout). */
     public static native void renderFrame(ByteBuffer packedParams);
 

@@ -81,6 +81,7 @@ add_library(rtx_renderer SHARED
     src/streamline_integration.cpp
     src/triangle.cpp
     src/chunk_renderer.cpp
+    src/atlas.cpp
     # Generated headers — listed as sources so cmake creates the dep edge.
     ${TRIANGLE_VERT_H}
     ${TRIANGLE_FRAG_H}

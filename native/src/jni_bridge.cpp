@@ -11,6 +11,7 @@ const JNINativeMethod kBridgeMethods[] = {
     {(char*)"uploadChunk",  (char*)"(IIILjava/nio/ByteBuffer;Ljava/nio/ByteBuffer;Ljava/nio/ByteBuffer;)V",
                                                                       (void*)rtxmc_native_uploadChunk},
     {(char*)"removeChunk",  (char*)"(III)V",                          (void*)rtxmc_native_removeChunk},
+    {(char*)"uploadBlockAtlas", (char*)"(IILjava/nio/ByteBuffer;)V",  (void*)rtxmc_native_uploadBlockAtlas},
     {(char*)"renderFrame",  (char*)"(Ljava/nio/ByteBuffer;)V",        (void*)rtxmc_native_renderFrame},
     {(char*)"shutdown",     (char*)"()V",                             (void*)rtxmc_native_shutdown},
 };
@@ -77,6 +78,13 @@ JNIEXPORT void JNICALL rtxmc_native_uploadChunk(
 
 JNIEXPORT void JNICALL rtxmc_native_removeChunk(JNIEnv*, jclass, jint cx, jint cy, jint cz) {
     rtxmc::rtx_remove_chunk(cx, cy, cz);
+}
+
+JNIEXPORT void JNICALL rtxmc_native_uploadBlockAtlas(JNIEnv* env, jclass,
+                                                     jint w, jint h, jobject pixels) {
+    void* p = env->GetDirectBufferAddress(pixels);
+    auto bytes = (uint32_t)env->GetDirectBufferCapacity(pixels);
+    rtxmc::rtx_upload_block_atlas(w, h, p, bytes);
 }
 
 // ---- DLSS ------------------------------------------------------------------

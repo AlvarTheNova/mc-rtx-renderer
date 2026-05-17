@@ -5,6 +5,7 @@
 #include "streamline_integration.h"
 #include "triangle.h"
 #include "chunk_renderer.h"
+#include "atlas.h"
 
 #include <array>
 #include <cstdarg>
@@ -198,6 +199,7 @@ int rtx_init(void* hwnd, int w, int h) {
     if (!g_triangle.init(c.swap_format, DEPTH_FORMAT))          return 5;
     if (!g_chunks.init(c.swap_format, DEPTH_FORMAT))            return 6;
     if (!create_depth_resources(c.swap_extent))                 return 7;
+    if (!atlas().init())                                        return 8;
 
     g_tracer.resize(c.swap_extent, c.swap_extent);
     log("rtx_init complete (device=%s)", c.phys_name);
@@ -365,6 +367,7 @@ void rtx_shutdown() {
     log("rtx_shutdown");
     auto& c = ctx();
     if (c.device) vkDeviceWaitIdle(c.device);
+    atlas().destroy();
     g_chunks.destroy();
     g_triangle.destroy();
     g_tracer.destroy();
@@ -388,5 +391,9 @@ void rtx_remove_chunk(int cx, int cy, int cz) { bvh().remove_chunk(cx, cy, cz); 
 void rtx_set_super_resolution(int p)   { sl().set_sr_preset(p); }
 void rtx_set_ray_reconstruction(int p) { sl().set_rr_enabled(p); }
 void rtx_set_frame_generation(int f)   { sl().set_fg_factor(f); }
+
+void rtx_upload_block_atlas(int w, int h, const void* pixels, uint32_t bytes) {
+    atlas().upload(w, h, pixels, bytes);
+}
 
 } // namespace rtxmc
