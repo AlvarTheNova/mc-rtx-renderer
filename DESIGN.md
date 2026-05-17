@@ -2,7 +2,7 @@
 
 A from-scratch rewrite of Minecraft Java Edition's renderer targeting **Vulkan 1.3 + full path tracing + DLSS 4** (Super Resolution, Ray Reconstruction, Multi-Frame Generation). Built as a Fabric mod that mixin-replaces the vanilla render path, with the hot loop in native C++.
 
-Target: Minecraft 1.21.x (Java), NVIDIA RTX 40/50-series (Ada/Blackwell), Windows 10/11 x64.
+Target: Minecraft 1.21.11 (Java), NVIDIA RTX 40/50-series (Ada/Blackwell), Windows 10/11 x64.
 
 ---
 

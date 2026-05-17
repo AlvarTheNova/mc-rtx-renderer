@@ -53,8 +53,9 @@ public final class VulkanRenderer {
         bvhUploader.flushDirtyChunks();
 
         frameParams.clear();
-        // Camera pose
-        var pos = camera.getPos();
+        // Camera pose. Note: Camera.getPos() was removed in 1.21.11 Yarn;
+        // the `pos` field is now accessed directly (widened via access widener).
+        var pos = camera.pos;
         frameParams.putDouble(pos.x).putDouble(pos.y).putDouble(pos.z);
         frameParams.putFloat(camera.getYaw()).putFloat(camera.getPitch());
         // View + projection

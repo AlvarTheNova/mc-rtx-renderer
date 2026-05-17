@@ -1,23 +1,32 @@
 plugins {
-    id("fabric-loom") version "1.9-SNAPSHOT"
+    id("net.fabricmc.fabric-loom-remap") version "1.16.2"
     `java-library`
 }
 
-val minecraftVersion: String by project
-val yarnMappings: String by project
-val loaderVersion: String by project
-val fabricVersion: String by project
-val modVersion: String by project
-val mavenGroup: String by project
-val archivesBaseName: String by project
-val lwjglVersion: String by project
+// Properties read from gradle.properties (snake_case there → camelCase here).
+// `by project` would only match if the names matched verbatim, which they don't.
+val minecraftVersion = property("minecraft_version") as String
+val yarnMappings    = property("yarn_mappings")    as String
+val loaderVersion   = property("loader_version")   as String
+val fabricVersion   = property("fabric_version")   as String
+val modVersion      = property("mod_version")      as String
+val mavenGroup      = property("maven_group")      as String
+val archivesBaseName = property("archives_base_name") as String
+val lwjglVersion    = property("lwjgl_version")    as String
 
 version = modVersion
 group = mavenGroup
 base.archivesName.set(archivesBaseName)
 
+// Note: no `toolchain { languageVersion ... }`. With a pinned toolchain
+// Gradle insists on locating that exact JDK and won't auto-download without
+// the foojay resolver (which doesn't always cooperate). Instead we compile
+// with whatever JDK is current and force --release 21 bytecode via
+// JavaCompile.options.release below. CI uses setup-java to pin JDK 21
+// explicitly. MC at runtime needs >= 21.
 java {
-    toolchain.languageVersion.set(JavaLanguageVersion.of(21))
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
     withSourcesJar()
 }
 
@@ -42,7 +51,6 @@ loom {
     accessWidenerPath.set(file("src/main/resources/rtxmc.accesswidener"))
     runs {
         named("client") {
-            // Force NVIDIA discrete GPU on laptops with hybrid graphics.
             vmArgs("-Dorg.lwjgl.util.Debug=true")
             // Streamline interposer needs to find sl.* plugin DLLs.
             vmArgs("-Djava.library.path=${projectDir}/native/build/Release;${projectDir}/streamline/bin/x64")
@@ -57,14 +65,21 @@ tasks.withType<JavaCompile>().configureEach {
 
 tasks.processResources {
     inputs.property("version", project.version)
+    inputs.property("mc_version", minecraftVersion)
     filesMatching("fabric.mod.json") {
         expand("version" to project.version, "mc_version" to minecraftVersion)
     }
 }
 
-// Convenience: build the native lib before assembling the mod jar.
+// Build the native lib only when explicitly requested. CI builds them in
+// separate jobs to avoid needing the Vulkan SDK on the mod-jar runner.
+val withNative = (findProperty("withNative") as String?)?.toBoolean() ?: false
+
 tasks.register<Exec>("buildNative") {
     workingDir = file("native")
     commandLine("cmake", "--build", "build", "--config", "Release")
 }
-tasks.named("assemble") { dependsOn("buildNative") }
+
+if (withNative) {
+    tasks.named("assemble") { dependsOn("buildNative") }
+}

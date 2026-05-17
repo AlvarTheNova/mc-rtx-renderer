@@ -29,7 +29,7 @@ Realistic subdivision — original "Phase 1" was 2-3 months of work, not weeks.
 - [x] `glfwMakeContextCurrent` redirected to bind dummy context
 - [x] `Window.swapBuffers` → `glfwSwapBuffers` no-op'd; VK present (from `LevelRendererMixin`) becomes the only present path
 - [x] `CANCEL_VANILLA = true` in `LevelRendererMixin` so vanilla world render doesn't waste cycles painting to the invisible dummy framebuffer
-- [ ] **First-boot validation (manual, blocks exit):** verify mixin signatures match Yarn 1.21.5 in a real Loom dev run; confirm clear color is visible; confirm main menu/GUI don't crash on dummy ctx
+- [ ] **First-boot validation (manual, blocks exit):** verify mixin signatures match Yarn 1.21.11 in a real Loom dev run; confirm clear color is visible; confirm main menu/GUI don't crash on dummy ctx
 - [ ] **Exit:** MC boots, VK animated clear color visible on screen, no GL/VK contention
 
 ### 1.3 — Raster triangle (~2 days)
