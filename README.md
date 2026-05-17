@@ -4,7 +4,7 @@
 
 Fork-and-rewrite of **Minecraft Java 1.21.11** renderer using **Vulkan 1.3 + full path tracing + DLSS 4** (Super Resolution, Ray Reconstruction, Multi-Frame Generation). Target hardware: NVIDIA RTX 40/50-series.
 
-> **State:** Phase 1.3 ✓ validated end-to-end in a live MC 1.21.11 instance. VK 1.3 dynamic rendering pipeline draws an NDC sentinel + a world-space RGB triangle on top of MC's render path with GL fully suppressed. Phase 1.4 (chunk rasterizer) is up next. See [ROADMAP.md](ROADMAP.md).
+> **State:** Phase 1.4.1 ✓ — chunk-section mesh plumbing live. `SectionBuilderMixin` intercepts vanilla's per-section mesh output (32 B/vertex, `[Position, Color, UV0, UV2, Normal]`, QUADS) on chunk worker threads, copies it out before allocator-backed buffers are freed, forwards through JNI to a thread-safe native `BvhStore`. No rendering of the chunks yet — that's 1.4.2. See [ROADMAP.md](ROADMAP.md).
 
 ## Read first
 

@@ -45,13 +45,14 @@ Realistic subdivision — original "Phase 1" was 2-3 months of work, not weeks.
 
 ### 1.4 — Chunk rasterizer
 
-#### 1.4.1 — Section mesh plumbing  ◄ current
+#### 1.4.1 — Section mesh plumbing  ✓ done
 - [x] Identify 1.21.11's mesh emit point: `SectionBuilder.build(...) → RenderData{ Map<BlockRenderLayer, BuiltBuffer> }`
 - [x] `SectionBuilderMixin` `@Inject` at RETURN; copy SOLID-layer bytes (BuiltBuffer is allocator-backed and freed on `RenderData.close`)
 - [x] Forward through JNI to `BvhStore::upload_chunk` per-section
 - [x] Native side thread-safe (`std::mutex` — meshing runs on worker threads)
 - [x] One-shot log budget (8 sections) on both sides
-- [ ] **First-boot validate:** load a world, log shows sections with reasonable vertex counts (a few hundred to few thousand verts per SOLID-bearing section)
+- [x] **First-boot validated:** worker threads delivered 8 sections, each 1024 verts × 32 B (vertex format `[Position, Color, UV0, UV2, Normal]`, QUADS mode, index count 1.5× vert count). Per-section coords sensible (-6..0 around player position).
+- [x] **Gotcha learned:** `CANCEL_VANILLA = true` in `LevelRendererMixin` is too aggressive — `WorldRenderer.render` is where vanilla schedules rebuild tasks. Reverted to `false` until we own chunk rendering and can schedule rebuilds independently.
 
 #### 1.4.2 — Single-section render (~few days)
 - [ ] Parse MC's vertex format (POSITION + COLOR + UV + LIGHT + NORMAL, packed)

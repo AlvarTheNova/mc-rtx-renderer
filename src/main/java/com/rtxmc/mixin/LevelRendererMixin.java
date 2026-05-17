@@ -26,10 +26,16 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  */
 @Mixin(WorldRenderer.class)
 public abstract class LevelRendererMixin {
-    // Phase 1.2: GL is now redirected into a hidden dummy context, so vanilla
-    // world rendering just paints to an invisible 1×1 framebuffer. Cancel it
-    // to save the CPU/GPU work.
-    private static final boolean CANCEL_VANILLA = true;
+    // Phase 1.4.1 walked us back from true: WorldRenderer.render is also where
+    // vanilla schedules chunk-section rebuilds. Cancelling it stops MC from
+    // ever asking SectionBuilder to mesh anything — so SectionBuilderMixin
+    // never fires and the client times out waiting for chunks to load.
+    //
+    // Vanilla now runs to completion, painting into the invisible dummy GL
+    // framebuffer. Our VK render (called at @At("HEAD") before vanilla's body)
+    // is what reaches the actual screen. Wasted CPU/GPU until we own chunk
+    // rendering ourselves and can schedule rebuilds independently — Phase 1.4.3+.
+    private static final boolean CANCEL_VANILLA = false;
 
     @Inject(
             method = "render(Lnet/minecraft/client/util/ObjectAllocator;Lnet/minecraft/client/render/RenderTickCounter;ZLnet/minecraft/client/render/Camera;Lorg/joml/Matrix4f;Lorg/joml/Matrix4f;Lorg/joml/Matrix4f;Lcom/mojang/blaze3d/buffers/GpuBufferSlice;Lorg/joml/Vector4f;Z)V",
