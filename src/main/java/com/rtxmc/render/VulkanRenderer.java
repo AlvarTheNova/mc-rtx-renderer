@@ -47,7 +47,7 @@ public final class VulkanRenderer {
         NativeBridge.resize(width, height);
     }
 
-    public void renderFrame(Camera camera, Matrix4f view, Matrix4f proj, float tickDelta) {
+    public void renderFrame(Camera camera, Matrix4f positionMatrix, Matrix4f proj, float tickDelta) {
         if (!initialized) return;
 
         bvhUploader.flushDirtyChunks();
@@ -58,7 +58,23 @@ public final class VulkanRenderer {
         var pos = camera.pos;
         frameParams.putDouble(pos.x).putDouble(pos.y).putDouble(pos.z);
         frameParams.putFloat(camera.getYaw()).putFloat(camera.getPitch());
-        // View + projection
+
+        // MC's positionMatrix in 1.21.11 is rotation-only — Mojang's vanilla
+        // renderer applies the camera translation per-chunk via separate
+        // matrix-stack ops. We need a full view matrix here, so combine the
+        // rotation with translate(-camPos):
+        //
+        //   view = positionMatrix * translate(-px, -py, -pz)
+        //
+        // For a world point p:  view * p = R * (p - camPos) → eye-space coord.
+        //
+        // Float precision is fine while camPos is in normal-block range. For
+        // far-from-origin worlds (millions of blocks) we'll need camera-
+        // relative geometry like vanilla does — Phase 1.4 chunk meshing
+        // problem, not this one.
+        Matrix4f view = new Matrix4f(positionMatrix);
+        view.translate((float) -pos.x, (float) -pos.y, (float) -pos.z);
+
         putMat4(frameParams, view);
         putMat4(frameParams, proj);
         frameParams.putFloat(tickDelta);

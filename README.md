@@ -4,7 +4,7 @@
 
 Fork-and-rewrite of **Minecraft Java 1.21.11** renderer using **Vulkan 1.3 + full path tracing + DLSS 4** (Super Resolution, Ray Reconstruction, Multi-Frame Generation). Target hardware: NVIDIA RTX 40/50-series.
 
-> **State:** Phase 1.3 — first real geometry. GLSL→SPIR-V build pipeline, VK 1.3 dynamic rendering, push-constant view/proj wired to MC camera. A two-sided RGB triangle now sits at world `(0, 100, 0)` and should follow camera motion. Phase 1.2 GL suppression still pending its first-boot validation in a live MC instance. See [ROADMAP.md](ROADMAP.md).
+> **State:** Phase 1.3 ✓ validated end-to-end in a live MC 1.21.11 instance. VK 1.3 dynamic rendering pipeline draws an NDC sentinel + a world-space RGB triangle on top of MC's render path with GL fully suppressed. Phase 1.4 (chunk rasterizer) is up next. See [ROADMAP.md](ROADMAP.md).
 
 ## Read first
 

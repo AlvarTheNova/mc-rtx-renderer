@@ -23,24 +23,25 @@ Realistic subdivision — original "Phase 1" was 2-3 months of work, not weeks.
 - [x] Verbose init logging (device name, queue families, swapchain format, image count)
 - [x] **Exit:** MC boots, native log shows full VK init success, swapchain frames are dispatched every game frame (GL still wins the screen — that's 1.2's job)
 
-### 1.2 — GL suppression (~1 week)  ◄ current
+### 1.2 — GL suppression  ✓ done
 - [x] `WindowMixin` redirects `glfwCreateWindow` → main window with `GLFW_NO_API`
 - [x] Hidden 1×1 dummy GL window absorbs MC's `GL.createCapabilities()` + every subsequent `RenderSystem`/`GlStateManager` call (avoids the comprehensive shim)
 - [x] `glfwMakeContextCurrent` redirected to bind dummy context
 - [x] `Window.swapBuffers` → `glfwSwapBuffers` no-op'd; VK present (from `LevelRendererMixin`) becomes the only present path
 - [x] `CANCEL_VANILLA = true` in `LevelRendererMixin` so vanilla world render doesn't waste cycles painting to the invisible dummy framebuffer
-- [ ] **First-boot validation (manual, blocks exit):** verify mixin signatures match Yarn 1.21.11 in a real Loom dev run; confirm clear color is visible; confirm main menu/GUI don't crash on dummy ctx
-- [ ] **Exit:** MC boots, VK animated clear color visible on screen, no GL/VK contention
+- [x] **First-boot validated:** MC boots cleanly, three mixins (`WindowMixin`, `GlBackendMixin`, `RenderSystemMixin`) all apply, dummy ctx absorbs GL traffic, dark slate clear color visible everywhere, no crashes. Mojang refactored GL bring-up across `Window`/`GlBackend`/`RenderSystem` in 1.21.11 — three mixins now do the work that one tried to in earlier drafts.
 
-### 1.3 — Raster triangle  ◄ current
+### 1.3 — Raster triangle  ✓ done
 - [x] GLSL → SPIR-V at native build time (CMake `add_spirv_shader` via `glslangValidator --vn`, embedded as C arrays)
 - [x] VK 1.3 dynamic rendering — no render pass / framebuffer needed
 - [x] Push-constant view + proj matrices (avoids descriptor-set boilerplate; 128 bytes, sits right at the minimum guarantee)
 - [x] Vertices baked into shader via `gl_VertexIndex` (no vertex buffer yet)
 - [x] Two-sided triangle at world `(0, 100, 0)`, ~10m wide, RGB-shaded
+- [x] NDC-space sentinel triangle in top-left for pipeline-vs-matrix disambiguation
 - [x] `dynamicRendering` + `synchronization2` enabled at device creation (VkPhysicalDeviceVulkan13Features)
-- [ ] **First-boot validation:** confirm triangle is visible from MC camera, colors follow rotation/movement
-- [ ] **Exit:** debug triangle pinned at world origin, follows MC camera correctly
+- [x] GL→VK clip-space conversion (Y flip + Z [-1,1]→[0,1]) in shader
+- [x] View matrix reconstructed Java-side as `positionMatrix * translate(-camPos)` — MC 1.21.11's `positionMatrix` is rotation-only, doesn't include camera translation (Mojang does that per-chunk)
+- [x] **First-boot validated:** NDC sentinel + world triangle both visible from MC camera at `/tp @s 0 95 5`
 
 ### 1.4 — Chunk rasterizer (~2 weeks)
 - [ ] Hook `ChunkBuilder` mesh outputs, translate vanilla format → our packed vertex format
