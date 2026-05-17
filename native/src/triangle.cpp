@@ -158,7 +158,9 @@ void Triangle::record(VkCommandBuffer cmd,
     for (int i = 0; i < 16; ++i) pc[16 + i] = proj[i];
     vkCmdPushConstants(cmd, layout_, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), pc);
 
-    vkCmdDraw(cmd, 3, 1, 0, 0);
+    // 6 vertices: 0-2 = world-space test triangle, 3-5 = NDC sentinel.
+    // See shaders/triangle.vert for the layout.
+    vkCmdDraw(cmd, 6, 1, 0, 0);
 }
 
 void Triangle::destroy() {

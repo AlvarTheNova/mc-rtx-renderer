@@ -54,6 +54,11 @@ loom {
             vmArgs("-Dorg.lwjgl.util.Debug=true")
             // Streamline interposer needs to find sl.* plugin DLLs.
             vmArgs("-Djava.library.path=${projectDir}/native/build/Release;${projectDir}/streamline/bin/x64")
+            // Same JDK 25 + Cloudflare cacerts issue we hit in settings.gradle.kts —
+            // MC's auth-lib hits sessionserver.mojang.com via Cloudflare too.
+            if (System.getProperty("os.name").startsWith("Windows")) {
+                vmArgs("-Djavax.net.ssl.trustStoreType=Windows-ROOT")
+            }
         }
     }
 }
