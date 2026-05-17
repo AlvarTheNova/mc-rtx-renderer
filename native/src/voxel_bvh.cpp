@@ -24,12 +24,81 @@ BvhStore g_bvh;
 
 BvhStore& bvh() { return g_bvh; }
 
+namespace {
+
+uint32_t find_memory_type_init(uint32_t type_bits, VkMemoryPropertyFlags wanted) {
+    VkPhysicalDeviceMemoryProperties mp;
+    vkGetPhysicalDeviceMemoryProperties(ctx().phys, &mp);
+    for (uint32_t i = 0; i < mp.memoryTypeCount; ++i) {
+        if ((type_bits & (1u << i)) &&
+            (mp.memoryTypes[i].propertyFlags & wanted) == wanted) {
+            return i;
+        }
+    }
+    return UINT32_MAX;
+}
+
+// Cap on quads any single chunk section can contain. Observed sections have
+// ~256 quads; we budget 16384 quads (4× section faces if every block were
+// a full transparent overdraw). u32 indices keep us safe up to 64K verts.
+constexpr uint32_t MAX_QUADS_PER_SECTION = 16384;
+
+} // namespace
+
 bool BvhStore::init() {
+    auto& c = ctx();
+
+    // Build the shared quad index buffer. Pattern per quad q (0-based):
+    //   q*4+0, q*4+1, q*4+2,  q*4+2, q*4+3, q*4+0
+    // Two triangles, second sharing edge 2→0 with the first.
+    quad_index_capacity_ = MAX_QUADS_PER_SECTION * 6;
+    const VkDeviceSize bytes = quad_index_capacity_ * sizeof(uint32_t);
+
+    VkBufferCreateInfo bci{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
+    bci.size        = bytes;
+    bci.usage       = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+    bci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    if (vkCreateBuffer(c.device, &bci, nullptr, &quad_index_buffer_) != VK_SUCCESS) {
+        log("BvhStore::init: vkCreateBuffer for index buffer failed");
+        return false;
+    }
+
+    VkMemoryRequirements mr;
+    vkGetBufferMemoryRequirements(c.device, quad_index_buffer_, &mr);
+    VkMemoryAllocateInfo ai{VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
+    ai.allocationSize  = mr.size;
+    ai.memoryTypeIndex = find_memory_type_init(mr.memoryTypeBits,
+                            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                            VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    if (ai.memoryTypeIndex == UINT32_MAX ||
+        vkAllocateMemory(c.device, &ai, nullptr, &quad_index_memory_) != VK_SUCCESS) {
+        log("BvhStore::init: index buffer memory alloc failed");
+        return false;
+    }
+    vkBindBufferMemory(c.device, quad_index_buffer_, quad_index_memory_, 0);
+
+    void* mapped = nullptr;
+    if (vkMapMemory(c.device, quad_index_memory_, 0, bytes, 0, &mapped) != VK_SUCCESS) {
+        log("BvhStore::init: index buffer vkMapMemory failed");
+        return false;
+    }
+    auto* idx = static_cast<uint32_t*>(mapped);
+    for (uint32_t q = 0; q < MAX_QUADS_PER_SECTION; ++q) {
+        const uint32_t base = q * 4;
+        idx[q * 6 + 0] = base + 0;
+        idx[q * 6 + 1] = base + 1;
+        idx[q * 6 + 2] = base + 2;
+        idx[q * 6 + 3] = base + 2;
+        idx[q * 6 + 4] = base + 3;
+        idx[q * 6 + 5] = base + 0;
+    }
+    vkUnmapMemory(c.device, quad_index_memory_);
+    log("shared quad index buffer: %u quads, %u indices, %.1f KB",
+        MAX_QUADS_PER_SECTION, quad_index_capacity_, bytes / 1024.0);
+
     // TODO Phase 3:
-    //   - Pre-create staging buffer pool for BLAS scratch (compute proper
-    //     scratch size from vkGetAccelerationStructureBuildSizesKHR with a
-    //     pessimistic triangle count).
-    //   - Pre-allocate TLAS instance buffer (max ~16k instances at RD 12).
+    //   - Pre-create staging buffer pool for BLAS scratch
+    //   - Pre-allocate TLAS instance buffer
     return true;
 }
 
@@ -198,6 +267,12 @@ void BvhStore::destroy() {
     tlas_ = VK_NULL_HANDLE;
     tlas_buffer_ = VK_NULL_HANDLE;
     tlas_memory_ = VK_NULL_HANDLE;
+
+    if (quad_index_buffer_) vkDestroyBuffer(c.device, quad_index_buffer_, nullptr);
+    if (quad_index_memory_) vkFreeMemory(c.device, quad_index_memory_, nullptr);
+    quad_index_buffer_ = VK_NULL_HANDLE;
+    quad_index_memory_ = VK_NULL_HANDLE;
+    quad_index_capacity_ = 0;
 }
 
 } // namespace rtxmc

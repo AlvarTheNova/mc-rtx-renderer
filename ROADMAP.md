@@ -54,12 +54,19 @@ Realistic subdivision — original "Phase 1" was 2-3 months of work, not weeks.
 - [x] **First-boot validated:** worker threads delivered 8 sections, each 1024 verts × 32 B (vertex format `[Position, Color, UV0, UV2, Normal]`, QUADS mode, index count 1.5× vert count). Per-section coords sensible (-6..0 around player position).
 - [x] **Gotcha learned:** `CANCEL_VANILLA = true` in `LevelRendererMixin` is too aggressive — `WorldRenderer.render` is where vanilla schedules rebuild tasks. Reverted to `false` until we own chunk rendering and can schedule rebuilds independently.
 
-#### 1.4.2 — Single-section render (~few days)
-- [ ] Parse MC's vertex format (POSITION + COLOR + UV + LIGHT + NORMAL, packed)
-- [ ] Translate to our packed format (see DESIGN §3.1)
-- [ ] Per-section VK vertex buffer (device-local, staging upload)
-- [ ] Chunk pipeline (vert+frag, depth test enabled, GL→VK clip applied to proj)
-- [ ] Render one section in the test world, untextured (flat color from vertex)
+#### 1.4.2 — First-light chunk render  ✓ done
+- [x] Consume MC's vertex format directly (no repack): pos f32×3 / color u8×4 / UV0 f32×2 / UV2 u16×2 light / normal u8×4 = 32 B
+- [x] Per-section VkBuffer (HOST_VISIBLE + COHERENT for simplicity; staging upload deferred to 1.4.3)
+- [x] Chunk pipeline (depth-tested, GL→VK clip in shader, push-constant section world-offset)
+- [x] D32_SFLOAT depth attachment threaded through dynamic rendering
+- [x] Per-frame draw loop iterates loaded sections, untextured (vertex color × NdotL + light)
+- [x] **First-boot validated:** chunks visible (garbled topology — see 1.4.2.5)
+- [x] **Hazard discovered:** use-after-free on VkBuffer when sections re-mesh on workers — render thread still held handle. Fixed by leak-on-replace; proper deferred deletion in 1.4.3.
+
+#### 1.4.2.5 — Honor quad index buffer  ◄ current
+- [ ] Generate shared u32 index buffer at init with `{0,1,2, 2,3,0}` pattern × MAX_QUADS
+- [ ] `vkCmdDrawIndexed` instead of `vkCmdDraw` for chunks
+- [ ] **Exit:** chunk topology correct — no more X-pattern garbage across each block face
 
 #### 1.4.3 — All loaded sections
 - [ ] Section lifecycle: add/remove on world load/unload

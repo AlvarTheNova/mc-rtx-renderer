@@ -56,6 +56,12 @@ public:
 
     VkAccelerationStructureKHR tlas() const { return tlas_; }
 
+    // Shared quad → triangle index buffer (Phase 1.4.2.5). MC emits QUADS;
+    // we synthesise {0,1,2, 2,3,0} × MAX_QUADS once at init() and reuse it
+    // for every chunk draw via vkCmdDrawIndexed.
+    VkBuffer  shared_quad_index_buffer() const { return quad_index_buffer_; }
+    uint32_t  shared_quad_index_capacity_indices() const { return quad_index_capacity_; }
+
     // Snapshot the current chunk map for the render thread. Returns a vector
     // of (key, blas-handles-needed-for-draw) so the renderer can iterate
     // without holding the mutex.
@@ -87,6 +93,10 @@ private:
         VkDeviceMemory memory;
     };
     std::vector<OrphanedResources> leaked_;
+
+    VkBuffer       quad_index_buffer_   = VK_NULL_HANDLE;
+    VkDeviceMemory quad_index_memory_   = VK_NULL_HANDLE;
+    uint32_t       quad_index_capacity_ = 0;  // in indices
 };
 
 BvhStore& bvh();

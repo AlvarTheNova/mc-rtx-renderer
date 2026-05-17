@@ -14,7 +14,9 @@ public:
     void destroy();
 
     // Records draw commands for ONE section. Caller is responsible for
-    // vkCmdBeginRendering / vkCmdEndRendering and viewport state.
+    // vkCmdBeginRendering / vkCmdEndRendering and viewport state. The shared
+    // quad index buffer must be bound before the first call (the renderer
+    // does this once per render pass).
     void record(VkCommandBuffer cmd,
                 const float view[16],
                 const float proj[16],

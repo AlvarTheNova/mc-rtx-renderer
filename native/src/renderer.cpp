@@ -291,8 +291,17 @@ void rtx_render_frame(const FrameParams& params) {
     vkCmdSetScissor(f.cmd, 0, 1, &scissor);
 
     // Chunks first (depth-tested terrain). Snapshot under mutex; iterate outside.
+    // Bind the shared quad → triangle index buffer once per render pass; each
+    // chunk draw reuses it through vkCmdDrawIndexed.
     auto draws = bvh().snapshot_for_draw();
+    if (!draws.empty()) {
+        vkCmdBindIndexBuffer(f.cmd, bvh().shared_quad_index_buffer(), 0,
+                             VK_INDEX_TYPE_UINT32);
+    }
     for (const auto& d : draws) {
+        // Sanity: skip any section bigger than our shared index buffer can index.
+        const uint32_t needed_indices = (d.vertex_count / 4) * 6;
+        if (needed_indices > bvh().shared_quad_index_capacity_indices()) continue;
         g_chunks.record(f.cmd, params.view, params.proj,
                         d.cx, d.cy, d.cz, d.buffer, d.vertex_count);
     }

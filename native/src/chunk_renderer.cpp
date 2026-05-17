@@ -193,7 +193,13 @@ void ChunkRenderer::record(VkCommandBuffer cmd,
 
     VkDeviceSize offset = 0;
     vkCmdBindVertexBuffers(cmd, 0, 1, &vertex_buffer, &offset);
-    vkCmdDraw(cmd, vertex_count, 1, 0, 0);
+
+    // Phase 1.4.2.5: quad → triangle expansion via the shared index buffer
+    // (bound once per frame in renderer.cpp). MC emits 4 verts per quad;
+    // we issue 6 indices per quad through vkCmdDrawIndexed.
+    const uint32_t quad_count = vertex_count / 4;
+    const uint32_t index_count = quad_count * 6;
+    vkCmdDrawIndexed(cmd, index_count, 1, 0, 0, 0);
 }
 
 void ChunkRenderer::destroy() {
