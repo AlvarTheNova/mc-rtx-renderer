@@ -1,0 +1,21 @@
+# Default: normalize text on commit, native line endings in working tree
+* text=auto eol=lf
+
+# Force LF for shell scripts so they run on Linux CI
+*.sh    text eol=lf
+gradlew text eol=lf
+
+# Windows-only files keep CRLF
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+*.ps1   text eol=crlf
+
+# Binaries
+*.jar   binary
+*.png   binary
+*.jpg   binary
+*.zip   binary
+*.dll   binary
+*.so    binary
+*.dylib binary
+*.spv   binary
