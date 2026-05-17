@@ -63,10 +63,10 @@ Realistic subdivision — original "Phase 1" was 2-3 months of work, not weeks.
 - [x] **First-boot validated:** chunks visible (garbled topology — see 1.4.2.5)
 - [x] **Hazard discovered:** use-after-free on VkBuffer when sections re-mesh on workers — render thread still held handle. Fixed by leak-on-replace; proper deferred deletion in 1.4.3.
 
-#### 1.4.2.5 — Honor quad index buffer  ◄ current
-- [ ] Generate shared u32 index buffer at init with `{0,1,2, 2,3,0}` pattern × MAX_QUADS
-- [ ] `vkCmdDrawIndexed` instead of `vkCmdDraw` for chunks
-- [ ] **Exit:** chunk topology correct — no more X-pattern garbage across each block face
+#### 1.4.2.5 — Honor quad index buffer  ✓ done
+- [x] Shared u32 index buffer at init: `{0,1,2, 2,3,0}` × 16384 quads = 96K indices, 384 KB
+- [x] Renderer binds shared index buffer once per render pass; `vkCmdDrawIndexed` per section
+- [x] **First-boot validated:** chunks now render as **recognisable terrain** — hill shapes, dirt/stone patches, vertex-shaded by sun. Confirmed first true Minecraft-world output through our custom Vulkan pipeline.
 
 #### 1.4.3 — All loaded sections
 - [ ] Section lifecycle: add/remove on world load/unload
