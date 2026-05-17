@@ -2,6 +2,7 @@
 
 #include <vulkan/vulkan.h>
 #include <cstdint>
+#include <mutex>
 #include <unordered_map>
 
 namespace rtxmc {
@@ -52,11 +53,14 @@ public:
     VkAccelerationStructureKHR tlas() const { return tlas_; }
 
 private:
+    // Worker-thread chunk uploads contend with render-thread reads.
+    std::mutex                 mutex_;
     std::unordered_map<ChunkKey, ChunkBlas, ChunkKeyHash> chunks_;
     VkAccelerationStructureKHR tlas_         = VK_NULL_HANDLE;
     VkBuffer                   tlas_buffer_  = VK_NULL_HANDLE;
     VkDeviceMemory             tlas_memory_  = VK_NULL_HANDLE;
     bool                       tlas_dirty_   = false;
+    int                        log_budget_   = 8;
 };
 
 BvhStore& bvh();

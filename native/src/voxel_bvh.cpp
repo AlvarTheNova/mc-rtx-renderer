@@ -1,10 +1,24 @@
 #include "voxel_bvh.h"
 #include "vulkan_context.h"
 
+#include <cstdarg>
+#include <cstdio>
+
 namespace rtxmc {
 
 namespace {
+
+void log(const char* fmt, ...) {
+    std::fprintf(stderr, "[rtxmc native] ");
+    va_list ap; va_start(ap, fmt);
+    std::vfprintf(stderr, fmt, ap);
+    va_end(ap);
+    std::fprintf(stderr, "\n");
+    std::fflush(stderr);
+}
+
 BvhStore g_bvh;
+
 } // namespace
 
 BvhStore& bvh() { return g_bvh; }
@@ -22,23 +36,27 @@ void BvhStore::upload_chunk(int cx, int cy, int cz,
                             const void* verts, uint32_t vbytes,
                             const void* idx,   uint32_t ibytes,
                             const void* mats,  uint32_t mbytes) {
-    (void)verts; (void)vbytes; (void)idx; (void)ibytes; (void)mats; (void)mbytes;
+    (void)verts; (void)idx; (void)mats;
     ChunkKey k{cx, cy, cz};
 
-    // TODO Phase 3:
-    //   1. If chunk already exists, free old BLAS (or rebuild in place if
-    //      triangle count fits in existing buffer).
-    //   2. Upload vertex+index buffers to device-local memory.
-    //   3. Build BLAS via vkCmdBuildAccelerationStructuresKHR with
-    //      FAST_TRACE | ALLOW_COMPACTION.
-    //   4. Optionally schedule compaction pass next frame.
-    //   5. Store material indirection table for closest-hit shader.
+    std::lock_guard<std::mutex> guard(mutex_);
+
+    if (log_budget_ > 0) {
+        --log_budget_;
+        log("upload_chunk section=(%d,%d,%d) vertices=%u bytes, indices=%u bytes, mats=%u bytes",
+            cx, cy, cz, vbytes, ibytes, mbytes);
+    }
+
+    // TODO Phase 1.4.2: actually retain the vertex bytes, parse MC's vertex
+    // format, build per-section VkBuffer for rasterization.
+    // TODO Phase 3: build BLAS, mark TLAS dirty.
 
     chunks_[k] = ChunkBlas{};
     tlas_dirty_ = true;
 }
 
 void BvhStore::remove_chunk(int cx, int cy, int cz) {
+    std::lock_guard<std::mutex> guard(mutex_);
     auto it = chunks_.find({cx, cy, cz});
     if (it == chunks_.end()) return;
     auto& c = ctx();
@@ -64,6 +82,7 @@ void BvhStore::update_tlas(VkCommandBuffer cmd) {
 }
 
 void BvhStore::destroy() {
+    std::lock_guard<std::mutex> guard(mutex_);
     auto& c = ctx();
     for (auto& [_, b] : chunks_) {
         if (b.as)     c.ext.vkDestroyAccelerationStructureKHR(c.device, b.as, nullptr);

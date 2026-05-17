@@ -43,12 +43,42 @@ Realistic subdivision — original "Phase 1" was 2-3 months of work, not weeks.
 - [x] View matrix reconstructed Java-side as `positionMatrix * translate(-camPos)` — MC 1.21.11's `positionMatrix` is rotation-only, doesn't include camera translation (Mojang does that per-chunk)
 - [x] **First-boot validated:** NDC sentinel + world triangle both visible from MC camera at `/tp @s 0 95 5`
 
-### 1.4 — Chunk rasterizer (~2 weeks)
-- [ ] Hook `ChunkBuilder` mesh outputs, translate vanilla format → our packed vertex format
-- [ ] Greedy meshing pass (port from Sodium reference)
-- [ ] Bindless block texture atlas
-- [ ] Frustum culling + per-section visibility
-- [ ] **Exit:** chunks render at vanilla visual parity (no shadows/lighting beyond vanilla blocklight)
+### 1.4 — Chunk rasterizer
+
+#### 1.4.1 — Section mesh plumbing  ◄ current
+- [x] Identify 1.21.11's mesh emit point: `SectionBuilder.build(...) → RenderData{ Map<BlockRenderLayer, BuiltBuffer> }`
+- [x] `SectionBuilderMixin` `@Inject` at RETURN; copy SOLID-layer bytes (BuiltBuffer is allocator-backed and freed on `RenderData.close`)
+- [x] Forward through JNI to `BvhStore::upload_chunk` per-section
+- [x] Native side thread-safe (`std::mutex` — meshing runs on worker threads)
+- [x] One-shot log budget (8 sections) on both sides
+- [ ] **First-boot validate:** load a world, log shows sections with reasonable vertex counts (a few hundred to few thousand verts per SOLID-bearing section)
+
+#### 1.4.2 — Single-section render (~few days)
+- [ ] Parse MC's vertex format (POSITION + COLOR + UV + LIGHT + NORMAL, packed)
+- [ ] Translate to our packed format (see DESIGN §3.1)
+- [ ] Per-section VK vertex buffer (device-local, staging upload)
+- [ ] Chunk pipeline (vert+frag, depth test enabled, GL→VK clip applied to proj)
+- [ ] Render one section in the test world, untextured (flat color from vertex)
+
+#### 1.4.3 — All loaded sections
+- [ ] Section lifecycle: add/remove on world load/unload
+- [ ] Per-section transform = world position offset
+- [ ] Draw indirect or simple per-section draw call loop
+
+#### 1.4.4 — Texture atlas
+- [ ] Extract MC's stitched block atlas (PNG)
+- [ ] Upload as VkImage + VkSampler
+- [ ] Bindless via `VK_EXT_descriptor_indexing` (already enabled in device features)
+- [ ] Map UVs from MC's vertex stream to atlas coords
+
+#### 1.4.5 — Frustum culling
+- [ ] Per-section AABB
+- [ ] Frustum extraction from MC's projection (we have it via FrameParams)
+- [ ] Skip sections fully outside frustum
+
+#### 1.4.6 — Greedy meshing (optional perf)
+- [ ] Port Sodium's algorithm OR stay with MC's per-face meshes if perf is acceptable
+- [ ] **Exit Phase 1.4:** chunks render at vanilla visual parity
 
 ### 1.5 — Entities + particles + block entities (~2 weeks)
 - [ ] Entity model upload (vanilla model JSONs → VK mesh)
