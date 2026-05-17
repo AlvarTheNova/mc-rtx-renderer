@@ -138,13 +138,18 @@ void BvhStore::upload_chunk(int cx, int cy, int cz,
 
     std::lock_guard<std::mutex> guard(mutex_);
 
-    // Orphan any previous incarnation. Cannot free inline — the render
-    // thread may have this VkBuffer queued in an in-flight command buffer.
-    // Leak-on-replace deliberate; Phase 1.4.3 wires proper deferred deletion.
+    // Deferred deletion of any previous incarnation. Worker thread observes
+    // the current frame counter; the resource is safe to actually free once
+    // the render thread has advanced FRAMES_IN_FLIGHT+1 frames past this
+    // point (extra +1 covers the small window where the worker observes a
+    // stale counter just before the render thread increments).
+    constexpr uint64_t SAFETY_MARGIN_FRAMES = 3; // FRAMES_IN_FLIGHT (2) + 1
     auto it = chunks_.find(k);
     if (it != chunks_.end()) {
         if (it->second.buffer || it->second.memory) {
-            leaked_.push_back({it->second.buffer, it->second.memory});
+            pending_.push_back({it->second.buffer, it->second.memory,
+                                current_frame_.load(std::memory_order_acquire)
+                                + SAFETY_MARGIN_FRAMES});
         }
         chunks_.erase(it);
     }
@@ -221,12 +226,33 @@ void BvhStore::remove_chunk(int cx, int cy, int cz) {
     std::lock_guard<std::mutex> guard(mutex_);
     auto it = chunks_.find({cx, cy, cz});
     if (it == chunks_.end()) return;
-    // Same lifetime hazard as upload_chunk's replacement path — orphan, don't free.
+    constexpr uint64_t SAFETY_MARGIN_FRAMES = 3;
     if (it->second.buffer || it->second.memory) {
-        leaked_.push_back({it->second.buffer, it->second.memory});
+        pending_.push_back({it->second.buffer, it->second.memory,
+                            current_frame_.load(std::memory_order_acquire)
+                            + SAFETY_MARGIN_FRAMES});
     }
     chunks_.erase(it);
     tlas_dirty_ = true;
+}
+
+void BvhStore::flush_pending_deletes() {
+    std::lock_guard<std::mutex> guard(mutex_);
+    if (pending_.empty()) return;
+    auto& c = ctx();
+    const uint64_t cur = current_frame_.load(std::memory_order_acquire);
+    auto write = pending_.begin();
+    for (auto read = pending_.begin(); read != pending_.end(); ++read) {
+        if (cur >= read->safe_at_frame) {
+            if (read->buffer) vkDestroyBuffer(c.device, read->buffer, nullptr);
+            if (read->memory) vkFreeMemory(c.device, read->memory, nullptr);
+        } else if (write != read) {
+            *write++ = *read;
+        } else {
+            ++write;
+        }
+    }
+    pending_.erase(write, pending_.end());
 }
 
 void BvhStore::update_tlas(VkCommandBuffer cmd) {
@@ -256,11 +282,11 @@ void BvhStore::destroy() {
         free_chunk(b);
     }
     chunks_.clear();
-    for (auto& o : leaked_) {
-        if (o.buffer) vkDestroyBuffer(c.device, o.buffer, nullptr);
-        if (o.memory) vkFreeMemory(c.device, o.memory, nullptr);
+    for (auto& p : pending_) {
+        if (p.buffer) vkDestroyBuffer(c.device, p.buffer, nullptr);
+        if (p.memory) vkFreeMemory(c.device, p.memory, nullptr);
     }
-    leaked_.clear();
+    pending_.clear();
     if (tlas_)        c.ext.vkDestroyAccelerationStructureKHR(c.device, tlas_, nullptr);
     if (tlas_buffer_) vkDestroyBuffer(c.device, tlas_buffer_, nullptr);
     if (tlas_memory_) vkFreeMemory(c.device, tlas_memory_, nullptr);

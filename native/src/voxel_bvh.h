@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vulkan/vulkan.h>
+#include <atomic>
 #include <cstdint>
 #include <mutex>
 #include <unordered_map>
@@ -62,6 +63,15 @@ public:
     VkBuffer  shared_quad_index_buffer() const { return quad_index_buffer_; }
     uint32_t  shared_quad_index_capacity_indices() const { return quad_index_capacity_; }
 
+    // Frame ticking for deferred deletion. Render thread calls tick_frame()
+    // at the start of each frame; worker threads observe the counter when
+    // queueing pending deletes. flush_pending_deletes() actually destroys
+    // resources whose safe-frame has passed — called by render thread after
+    // vkWaitForFences (which guarantees frames N-FRAMES_IN_FLIGHT are done).
+    void     tick_frame()                  { current_frame_.fetch_add(1, std::memory_order_release); }
+    uint64_t current_frame() const         { return current_frame_.load(std::memory_order_acquire); }
+    void     flush_pending_deletes();
+
     // Snapshot the current chunk map for the render thread. Returns a vector
     // of (key, blas-handles-needed-for-draw) so the renderer can iterate
     // without holding the mutex.
@@ -82,17 +92,18 @@ private:
     bool                       tlas_dirty_   = false;
     int                        log_budget_   = 8;
 
-    // Phase 1.4.2 leak-on-replace: when a section re-meshes, the previous
-    // VkBuffer/VkDeviceMemory can't be safely freed inline — the render
-    // thread may still hold the handle in an in-flight command buffer.
-    // We orphan them into this list and only free at destroy() under
-    // vkDeviceWaitIdle. Phase 1.4.3 replaces this with proper deferred
-    // deletion keyed on frame fences.
-    struct OrphanedResources {
+    // Phase 1.4.3 deferred deletion. When a section re-meshes (worker
+    // thread) the old VkBuffer can't free inline — render thread may have
+    // it queued in an in-flight command buffer. We push into pending_; the
+    // render thread drains entries whose safe_at_frame is past after
+    // vkWaitForFences guarantees the relevant frame is done on GPU.
+    struct PendingDelete {
         VkBuffer       buffer;
         VkDeviceMemory memory;
+        uint64_t       safe_at_frame;
     };
-    std::vector<OrphanedResources> leaked_;
+    std::vector<PendingDelete> pending_;
+    std::atomic<uint64_t>      current_frame_{0};
 
     VkBuffer       quad_index_buffer_   = VK_NULL_HANDLE;
     VkDeviceMemory quad_index_memory_   = VK_NULL_HANDLE;

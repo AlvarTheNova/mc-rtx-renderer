@@ -220,6 +220,10 @@ void rtx_render_frame(const FrameParams& params) {
 
     vkWaitForFences(c.device, 1, &f.in_flight, VK_TRUE, UINT64_MAX);
 
+    // After the fence: GPU is done with this slot's previous submission, so
+    // any resources queued for deletion at or before this frame are safe.
+    bvh().flush_pending_deletes();
+
     uint32_t img_idx = 0;
     VkResult ar = vkAcquireNextImageKHR(c.device, c.swapchain, UINT64_MAX,
                                         f.image_available, VK_NULL_HANDLE, &img_idx);
@@ -351,6 +355,10 @@ void rtx_render_frame(const FrameParams& params) {
 
     g_frame_idx = (g_frame_idx + 1) % FRAMES_IN_FLIGHT;
     ++g_frame_counter;
+
+    // Tell BvhStore a frame has elapsed — worker threads see the new counter
+    // when queueing future deletions.
+    bvh().tick_frame();
 }
 
 void rtx_shutdown() {

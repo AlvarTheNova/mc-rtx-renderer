@@ -68,10 +68,24 @@ Realistic subdivision — original "Phase 1" was 2-3 months of work, not weeks.
 - [x] Renderer binds shared index buffer once per render pass; `vkCmdDrawIndexed` per section
 - [x] **First-boot validated:** chunks now render as **recognisable terrain** — hill shapes, dirt/stone patches, vertex-shaded by sun. Confirmed first true Minecraft-world output through our custom Vulkan pipeline.
 
-#### 1.4.3 — All loaded sections
-- [ ] Section lifecycle: add/remove on world load/unload
-- [ ] Per-section transform = world position offset
-- [ ] Draw indirect or simple per-section draw call loop
+#### 1.4.3 — Deferred deletion + lifecycle (split from original)
+
+##### 1.4.3a — Deferred deletion  ◄ current
+- [ ] Atomic frame counter in `BvhStore`, render thread ticks each frame
+- [ ] `pending_` queue of `(buffer, memory, safe_at_frame)` triples replaces leak-on-replace
+- [ ] Render thread calls `flush_pending_deletes()` after `vkWaitForFences` (guarantees GPU done with `frame - FRAMES_IN_FLIGHT`)
+- [ ] Worker sets `safe_at = current_frame + FRAMES_IN_FLIGHT + 1` when queueing
+- [ ] **Exit:** long play sessions no longer leak; pending queue size stays bounded by re-mesh rate
+
+##### 1.4.3b — Section lifecycle (future)
+- [ ] Hook MC's chunk unload notifications → call `rtx_remove_chunk`
+- [ ] Per-section transform via push-constant world offset (already done in 1.4.2)
+- [ ] Draw indirect (future optimisation)
+
+##### 1.4.3c — DEVICE_LOCAL staging (deferred)
+- [ ] Per-section buffer in DEVICE_LOCAL memory + transient staging buffer
+- [ ] Render-thread upload queue (workers enqueue, render thread drains)
+- [ ] Rationale for deferral: on ReBAR systems, HOST_VISIBLE memory is effectively device-local; perf cost of current path is negligible at typical section counts.
 
 #### 1.4.4 — Texture atlas
 - [ ] Extract MC's stitched block atlas (PNG)
