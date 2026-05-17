@@ -42,7 +42,7 @@ void BvhStore::remove_chunk(int cx, int cy, int cz) {
     auto it = chunks_.find({cx, cy, cz});
     if (it == chunks_.end()) return;
     auto& c = ctx();
-    if (it->second.as)     vkDestroyAccelerationStructureKHR(c.device, it->second.as, nullptr);
+    if (it->second.as)     c.ext.vkDestroyAccelerationStructureKHR(c.device, it->second.as, nullptr);
     if (it->second.buffer) vkDestroyBuffer(c.device, it->second.buffer, nullptr);
     if (it->second.memory) vkFreeMemory(c.device, it->second.memory, nullptr);
     chunks_.erase(it);
@@ -66,12 +66,12 @@ void BvhStore::update_tlas(VkCommandBuffer cmd) {
 void BvhStore::destroy() {
     auto& c = ctx();
     for (auto& [_, b] : chunks_) {
-        if (b.as)     vkDestroyAccelerationStructureKHR(c.device, b.as, nullptr);
+        if (b.as)     c.ext.vkDestroyAccelerationStructureKHR(c.device, b.as, nullptr);
         if (b.buffer) vkDestroyBuffer(c.device, b.buffer, nullptr);
         if (b.memory) vkFreeMemory(c.device, b.memory, nullptr);
     }
     chunks_.clear();
-    if (tlas_)        vkDestroyAccelerationStructureKHR(c.device, tlas_, nullptr);
+    if (tlas_)        c.ext.vkDestroyAccelerationStructureKHR(c.device, tlas_, nullptr);
     if (tlas_buffer_) vkDestroyBuffer(c.device, tlas_buffer_, nullptr);
     if (tlas_memory_) vkFreeMemory(c.device, tlas_memory_, nullptr);
     tlas_ = VK_NULL_HANDLE;

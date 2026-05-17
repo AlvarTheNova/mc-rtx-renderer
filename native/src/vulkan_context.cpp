@@ -183,6 +183,20 @@ bool create_device(VulkanContext& c) {
     c.rt_props.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
     p2.pNext = &c.rt_props;
     vkGetPhysicalDeviceProperties2(c.phys, &p2);
+
+    // Load extension entry points
+    #define LOAD(name) c.ext.name = (PFN_##name)vkGetDeviceProcAddr(c.device, #name); \
+        if (!c.ext.name) log("warning: failed to load " #name)
+    LOAD(vkCreateAccelerationStructureKHR);
+    LOAD(vkDestroyAccelerationStructureKHR);
+    LOAD(vkGetAccelerationStructureBuildSizesKHR);
+    LOAD(vkCmdBuildAccelerationStructuresKHR);
+    LOAD(vkGetAccelerationStructureDeviceAddressKHR);
+    LOAD(vkCreateRayTracingPipelinesKHR);
+    LOAD(vkCmdTraceRaysKHR);
+    LOAD(vkGetRayTracingShaderGroupHandlesKHR);
+    #undef LOAD
+
     log("device created, graphics queue family %u, RT max recursion depth %u",
         c.gfx_family, c.rt_props.maxRayRecursionDepth);
     return true;

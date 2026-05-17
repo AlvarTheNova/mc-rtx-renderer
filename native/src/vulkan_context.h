@@ -24,6 +24,19 @@ struct VulkanContext {
     // RT pipeline properties (filled after device creation)
     VkPhysicalDeviceRayTracingPipelinePropertiesKHR rt_props{};
 
+    // Extension function pointers — KHR/EXT entry points aren't exported
+    // from vulkan-1.lib, must be loaded via vkGetDeviceProcAddr.
+    struct ExtFns {
+        PFN_vkCreateAccelerationStructureKHR        vkCreateAccelerationStructureKHR        = nullptr;
+        PFN_vkDestroyAccelerationStructureKHR       vkDestroyAccelerationStructureKHR       = nullptr;
+        PFN_vkGetAccelerationStructureBuildSizesKHR vkGetAccelerationStructureBuildSizesKHR = nullptr;
+        PFN_vkCmdBuildAccelerationStructuresKHR     vkCmdBuildAccelerationStructuresKHR     = nullptr;
+        PFN_vkGetAccelerationStructureDeviceAddressKHR vkGetAccelerationStructureDeviceAddressKHR = nullptr;
+        PFN_vkCreateRayTracingPipelinesKHR          vkCreateRayTracingPipelinesKHR          = nullptr;
+        PFN_vkCmdTraceRaysKHR                       vkCmdTraceRaysKHR                       = nullptr;
+        PFN_vkGetRayTracingShaderGroupHandlesKHR    vkGetRayTracingShaderGroupHandlesKHR    = nullptr;
+    } ext;
+
     bool init(void* hwnd, int w, int h);
     void resize(int w, int h);
     void destroy();
