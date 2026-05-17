@@ -10,7 +10,7 @@ namespace rtxmc {
 // rasterizer takes over.
 class Triangle {
 public:
-    bool init(VkFormat color_format);
+    bool init(VkFormat color_format, VkFormat depth_format);
     void destroy();
 
     // Record draw commands into `cmd`. Caller is responsible for layout

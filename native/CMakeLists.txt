@@ -68,6 +68,8 @@ endfunction()
 set(SHADER_DIR "${CMAKE_SOURCE_DIR}/../shaders")
 add_spirv_shader("${SHADER_DIR}/triangle.vert" TRIANGLE_VERT_H)
 add_spirv_shader("${SHADER_DIR}/triangle.frag" TRIANGLE_FRAG_H)
+add_spirv_shader("${SHADER_DIR}/chunk.vert"    CHUNK_VERT_H)
+add_spirv_shader("${SHADER_DIR}/chunk.frag"    CHUNK_FRAG_H)
 
 # ---- Library ---------------------------------------------------------------
 add_library(rtx_renderer SHARED
@@ -78,9 +80,12 @@ add_library(rtx_renderer SHARED
     src/voxel_bvh.cpp
     src/streamline_integration.cpp
     src/triangle.cpp
+    src/chunk_renderer.cpp
     # Generated headers — listed as sources so cmake creates the dep edge.
     ${TRIANGLE_VERT_H}
     ${TRIANGLE_FRAG_H}
+    ${CHUNK_VERT_H}
+    ${CHUNK_FRAG_H}
 )
 
 target_include_directories(rtx_renderer PRIVATE

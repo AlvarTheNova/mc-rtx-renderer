@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <mutex>
 #include <unordered_map>
+#include <vector>
 
 namespace rtxmc {
 
@@ -23,12 +24,15 @@ struct ChunkKeyHash {
 };
 
 struct ChunkBlas {
+    // Phase 1.4.2: now also holds the raster vertex buffer (the same bytes
+    // that will eventually feed BLAS construction in Phase 3).
     VkAccelerationStructureKHR as     = VK_NULL_HANDLE;
-    VkBuffer                   buffer = VK_NULL_HANDLE;
-    VkDeviceMemory             memory = VK_NULL_HANDLE;
+    VkBuffer                   buffer = VK_NULL_HANDLE;   // VERTEX_BUFFER
+    VkDeviceMemory             memory = VK_NULL_HANDLE;   // HOST_VISIBLE + COHERENT
     uint64_t                   device_address = 0;
+    uint32_t                   vertex_count   = 0;        // bytes / 32
     uint32_t                   triangle_count = 0;
-    uint32_t                   instance_id    = 0; // index into TLAS instance array
+    uint32_t                   instance_id    = 0;
 };
 
 class BvhStore {
@@ -51,6 +55,16 @@ public:
     void update_tlas(VkCommandBuffer cmd);
 
     VkAccelerationStructureKHR tlas() const { return tlas_; }
+
+    // Snapshot the current chunk map for the render thread. Returns a vector
+    // of (key, blas-handles-needed-for-draw) so the renderer can iterate
+    // without holding the mutex.
+    struct ChunkDraw {
+        int32_t  cx, cy, cz;
+        VkBuffer buffer;
+        uint32_t vertex_count;
+    };
+    std::vector<ChunkDraw> snapshot_for_draw();
 
 private:
     // Worker-thread chunk uploads contend with render-thread reads.
