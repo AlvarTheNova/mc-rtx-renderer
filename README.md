@@ -2,7 +2,7 @@
 
 Fork-and-rewrite of Minecraft Java 1.21.x renderer using **Vulkan 1.3 + full path tracing + DLSS 4** (Super Resolution, Ray Reconstruction, Multi-Frame Generation). Target hardware: NVIDIA RTX 40/50-series.
 
-> **State:** Phase 0 scaffolding only. The project compiles in shape — it does not yet render anything. See [ROADMAP.md](ROADMAP.md) for what's next.
+> **State:** Phase 1.1 — VK plumbing proof-of-life. Vulkan instance/device/swapchain init, double-buffered acquire→clear→present every game frame. Nothing visible yet — vanilla GL still wins the swapchain race. Phase 1.2 (GL suppression) is what makes VK output actually reach the screen. See [ROADMAP.md](ROADMAP.md).
 
 ## Read first
 
@@ -43,7 +43,15 @@ Output mod jar lands in `build/libs/`. Drop it into a Fabric 1.21.5 instance alo
 
 ## What works today
 
-Nothing visible. This commit is project scaffolding: build system, mixin targets, JNI bridge, native module skeleton, shader skeletons. Phase 1 (Vulkan rasterizer at vanilla parity) is where actual pixels start showing up.
+Phase 1.1 brings the VK pipeline up end-to-end without rendering visible pixels:
+
+- Real HWND extracted from GLFW via `GLFWNativeWin32`
+- VK 1.3 instance, Win32 surface, discrete RT-capable device picked, swapchain w/ MAILBOX/FIFO fallback
+- Double-buffered per-frame sync (image-available + render-finished semaphores, in-flight fences)
+- Per-frame: acquire → layout transition → animated clear → layout transition → present
+- Out-of-date / suboptimal swapchain handling
+
+Phase 1.2 (GL suppression) is what makes those clear frames actually visible on screen — until then GL's `SwapBuffers` wins the race on the shared HWND. See [DESIGN.md §3.7](DESIGN.md).
 
 ## What this is NOT
 

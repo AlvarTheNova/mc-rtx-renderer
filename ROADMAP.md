@@ -12,12 +12,46 @@ Phased plan. Each phase is shippable on its own — even if you stop at phase 3 
 - [x] Streamline integration skeleton
 - [x] RT shader skeletons (rgen/rmiss/rchit)
 
-## Phase 1 — Vulkan substitution, raster only (~2 weeks)
-- [ ] Suppress vanilla GL context creation; create VK swapchain on GLFW HWND
-- [ ] Vanilla-equivalent rasterizer in Vulkan (chunk meshes, entities, particles)
-- [ ] Vanilla post (entity outline, fog)
-- [ ] HUD compositor
-- [ ] **Exit criteria:** runs a vanilla world at vanilla visual parity, all in VK
+## Phase 1 — Vulkan substitution, raster only
+
+Realistic subdivision — original "Phase 1" was 2-3 months of work, not weeks.
+
+### 1.1 — VK plumbing proof-of-life (~1 day)  ◄ current
+- [x] Extract HWND from GLFW window via `GLFWNativeWin32`
+- [x] Per-frame swapchain acquire / clear / present with proper semaphores + fences
+- [x] Animated clear color so a visual artifact would prove VK is alive *if* GL weren't fighting it
+- [x] Verbose init logging (device name, queue families, swapchain format, image count)
+- [x] **Exit:** MC boots, native log shows full VK init success, swapchain frames are dispatched every game frame (GL still wins the screen — that's 1.2's job)
+
+### 1.2 — GL suppression (~1 week)
+- [ ] Mixin into `Window.<init>` before GLFW window creation: `glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API)`
+- [ ] Comprehensive `RenderSystem` no-op shim (every static call MC makes — clear, blend, depth, viewport, etc. — redirected to a stub since there's no GL context)
+- [ ] Replace `Window.swapBuffers` with VK present
+- [ ] **Exit:** MC boots with no GL ctx, VK clear color is visible on screen, vanilla world rendering is bypassed
+
+### 1.3 — Raster triangle (~2 days)
+- [ ] Minimal VK graphics pipeline (vert + frag), one textured triangle from a vertex buffer
+- [ ] Per-frame UBO with view/proj matrices wired to MC camera
+- [ ] **Exit:** a debug triangle pinned at world origin, follows MC camera correctly
+
+### 1.4 — Chunk rasterizer (~2 weeks)
+- [ ] Hook `ChunkBuilder` mesh outputs, translate vanilla format → our packed vertex format
+- [ ] Greedy meshing pass (port from Sodium reference)
+- [ ] Bindless block texture atlas
+- [ ] Frustum culling + per-section visibility
+- [ ] **Exit:** chunks render at vanilla visual parity (no shadows/lighting beyond vanilla blocklight)
+
+### 1.5 — Entities + particles + block entities (~2 weeks)
+- [ ] Entity model upload (vanilla model JSONs → VK mesh)
+- [ ] Skeletal animation in vertex shader
+- [ ] Particle batched sprites
+- [ ] BlockEntity adapter (chests, signs, beds, banners)
+- [ ] **Exit:** mobs animate, particles work, chests open
+
+### 1.6 — HUD compositor + vanilla post (~3 days)
+- [ ] VK reimplementation of `GuiGraphics` (sprite batcher, text via MC's font atlas)
+- [ ] Entity outline + fog passes
+- [ ] **Exit:** vanilla parity for one full play session — main menu through gameplay through pause
 
 ## Phase 2 — DLSS SR (~1 week)
 - [ ] Streamline init, plugin discovery

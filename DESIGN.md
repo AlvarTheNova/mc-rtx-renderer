@@ -148,6 +148,18 @@ Streamline plugins used:
 
 - Main menu, loading screens, F3 overlay, inventory GUI, chat — all 2D and trivial. Keep a tiny GL or VK raster path just for `GuiGraphics`. Easiest: render GUI to a CPU-side buffer or a tiny VK pipeline and composite on top.
 
+### 3.7 GL/VK coexistence problem (Phase 1.1 → 1.2 gate)
+
+Vanilla MC creates an OpenGL context on the GLFW window during `Window.<init>` via `glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_API)`. That HWND can host both a GL context *and* a `VK_KHR_surface` simultaneously — but only one of them can drive what's actually on screen, because both end up calling into the same window-system swap path. Last present wins. Vanilla calls `Window.swapBuffers` (→ `glfwSwapBuffers` → `SwapBuffers(hdc)`) every game frame; if we present a VK image but vanilla's GL `SwapBuffers` lands after ours, GL wins. We're invisible.
+
+**Three possible resolutions:**
+
+1. **Full suppress (chosen).** Mixin into `Window` early — *before* `glfwCreateWindow` is called — and force `glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API)`. No GL context ever exists. Then shim every static call in `RenderSystem`, `BufferRenderer`, `GlStateManager` to a no-op or VK redirect. Replace `Window.swapBuffers` with a VK present. This is what VulkanMod does. Cost: large mixin surface (~50–100 static methods) but mechanically straightforward.
+2. **GL/VK interop.** Render VK into an external image (`VK_KHR_external_memory_win32`), import on the GL side with `GL_EXT_memory_object_win32`, blit, let GL composite + present. Cost: extra blit, dual driver memory tracking, weirdness on driver edge cases. Punted.
+3. **Frame-end mixin race.** Cancel `GameRenderer.render` entirely, do everything ourselves including GUI. Cost: equivalent to option 1 plus reimplementing all of MC's 2D GUI path in VK from day one.
+
+**Plan:** Phase 1.1 (this commit) brings VK fully online but accepts that GL still wins the screen. Phase 1.2 implements suppression. Phase 1.3+ can then make pixels actually visible.
+
 ---
 
 ## 4. Performance budget (RTX 5080, 4K output, DLSS Performance = 1080p internal)
