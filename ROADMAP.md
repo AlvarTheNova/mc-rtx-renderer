@@ -23,11 +23,14 @@ Realistic subdivision — original "Phase 1" was 2-3 months of work, not weeks.
 - [x] Verbose init logging (device name, queue families, swapchain format, image count)
 - [x] **Exit:** MC boots, native log shows full VK init success, swapchain frames are dispatched every game frame (GL still wins the screen — that's 1.2's job)
 
-### 1.2 — GL suppression (~1 week)
-- [ ] Mixin into `Window.<init>` before GLFW window creation: `glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API)`
-- [ ] Comprehensive `RenderSystem` no-op shim (every static call MC makes — clear, blend, depth, viewport, etc. — redirected to a stub since there's no GL context)
-- [ ] Replace `Window.swapBuffers` with VK present
-- [ ] **Exit:** MC boots with no GL ctx, VK clear color is visible on screen, vanilla world rendering is bypassed
+### 1.2 — GL suppression (~1 week)  ◄ current
+- [x] `WindowMixin` redirects `glfwCreateWindow` → main window with `GLFW_NO_API`
+- [x] Hidden 1×1 dummy GL window absorbs MC's `GL.createCapabilities()` + every subsequent `RenderSystem`/`GlStateManager` call (avoids the comprehensive shim)
+- [x] `glfwMakeContextCurrent` redirected to bind dummy context
+- [x] `Window.swapBuffers` → `glfwSwapBuffers` no-op'd; VK present (from `LevelRendererMixin`) becomes the only present path
+- [x] `CANCEL_VANILLA = true` in `LevelRendererMixin` so vanilla world render doesn't waste cycles painting to the invisible dummy framebuffer
+- [ ] **First-boot validation (manual, blocks exit):** verify mixin signatures match Yarn 1.21.5 in a real Loom dev run; confirm clear color is visible; confirm main menu/GUI don't crash on dummy ctx
+- [ ] **Exit:** MC boots, VK animated clear color visible on screen, no GL/VK contention
 
 ### 1.3 — Raster triangle (~2 days)
 - [ ] Minimal VK graphics pipeline (vert + frag), one textured triangle from a vertex buffer

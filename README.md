@@ -2,7 +2,7 @@
 
 Fork-and-rewrite of Minecraft Java 1.21.x renderer using **Vulkan 1.3 + full path tracing + DLSS 4** (Super Resolution, Ray Reconstruction, Multi-Frame Generation). Target hardware: NVIDIA RTX 40/50-series.
 
-> **State:** Phase 1.1 — VK plumbing proof-of-life. Vulkan instance/device/swapchain init, double-buffered acquire→clear→present every game frame. Nothing visible yet — vanilla GL still wins the swapchain race. Phase 1.2 (GL suppression) is what makes VK output actually reach the screen. See [ROADMAP.md](ROADMAP.md).
+> **State:** Phase 1.2 — GL suppression mechanism in place. MC's main window now uses `GLFW_NO_API`; all `RenderSystem`/`GlStateManager` calls land in a hidden 1×1 dummy GL context. VK present is the only present path. Should make the animated clear color visible — but mixin signatures haven't been validated against a real MC boot yet. See [ROADMAP.md](ROADMAP.md).
 
 ## Read first
 
@@ -41,17 +41,22 @@ cd ..
 
 Output mod jar lands in `build/libs/`. Drop it into a Fabric 1.21.5 instance alongside Fabric API.
 
-## What works today
+## What works today (in theory — see validation gap below)
 
-Phase 1.1 brings the VK pipeline up end-to-end without rendering visible pixels:
-
+**Phase 1.1 — VK pipeline:**
 - Real HWND extracted from GLFW via `GLFWNativeWin32`
 - VK 1.3 instance, Win32 surface, discrete RT-capable device picked, swapchain w/ MAILBOX/FIFO fallback
 - Double-buffered per-frame sync (image-available + render-finished semaphores, in-flight fences)
 - Per-frame: acquire → layout transition → animated clear → layout transition → present
 - Out-of-date / suboptimal swapchain handling
 
-Phase 1.2 (GL suppression) is what makes those clear frames actually visible on screen — until then GL's `SwapBuffers` wins the race on the shared HWND. See [DESIGN.md §3.7](DESIGN.md).
+**Phase 1.2 — GL suppression:**
+- `WindowMixin` forces main window to `GLFW_NO_API`
+- Hidden 1×1 dummy GL window absorbs all of MC's `RenderSystem` / `GlStateManager` calls — no crash from null function pointers, no comprehensive shim needed
+- `glfwSwapBuffers` no-op'd; VK present from `LevelRendererMixin` is the only present
+- Vanilla world render cancelled to save cycles
+
+**Validation gap:** I haven't been able to run this against a real MC 1.21.5 instance yet. The mixin targets `glfwCreateWindow` / `glfwMakeContextCurrent` / `glfwSwapBuffers` call sites by descriptor in `Window.<init>` / `Window.swapBuffers`. If Mojang's bytecode for those methods has shifted, the mixin's `defaultRequire: 1` will fail loudly at startup (good — you'll see it in the log). First-boot will need a real `./gradlew runClient` to confirm. See [DESIGN.md §3.7](DESIGN.md) for the full reasoning.
 
 ## What this is NOT
 

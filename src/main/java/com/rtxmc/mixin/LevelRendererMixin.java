@@ -21,7 +21,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  */
 @Mixin(WorldRenderer.class)
 public abstract class LevelRendererMixin {
-    private static final boolean CANCEL_VANILLA = false;
+    // Phase 1.2: GL is now redirected into a hidden dummy context, so vanilla
+    // world rendering just paints to an invisible 1×1 framebuffer. Cancel it
+    // to save the CPU/GPU work.
+    private static final boolean CANCEL_VANILLA = true;
 
     @Inject(
             method = "render(Lnet/minecraft/client/render/RenderTickCounter;ZLnet/minecraft/client/render/Camera;Lnet/minecraft/client/render/GameRenderer;Lnet/minecraft/client/render/LightmapTextureManager;Lorg/joml/Matrix4f;Lorg/joml/Matrix4f;)V",

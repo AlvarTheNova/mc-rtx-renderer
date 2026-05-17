@@ -158,7 +158,17 @@ Vanilla MC creates an OpenGL context on the GLFW window during `Window.<init>` v
 2. **GL/VK interop.** Render VK into an external image (`VK_KHR_external_memory_win32`), import on the GL side with `GL_EXT_memory_object_win32`, blit, let GL composite + present. Cost: extra blit, dual driver memory tracking, weirdness on driver edge cases. Punted.
 3. **Frame-end mixin race.** Cancel `GameRenderer.render` entirely, do everything ourselves including GUI. Cost: equivalent to option 1 plus reimplementing all of MC's 2D GUI path in VK from day one.
 
-**Plan:** Phase 1.1 (this commit) brings VK fully online but accepts that GL still wins the screen. Phase 1.2 implements suppression. Phase 1.3+ can then make pixels actually visible.
+**Chosen implementation (Phase 1.2):** option 1 — full suppress, with a refinement to avoid the massive `RenderSystem` shim:
+
+- `WindowMixin` redirects the `glfwCreateWindow` call inside `Window.<init>`. Before creating MC's main window with `GLFW_NO_API`, it first creates a **hidden 1×1 dummy GL window** with the same GL 3.2 core profile MC requests.
+- The mixin also redirects `glfwMakeContextCurrent` in `Window.<init>` to bind the *dummy* window's GL context instead of the main window's (which has no context). MC's subsequent `GL.createCapabilities()` call succeeds normally — LWJGL's function pointers are populated against the dummy's context.
+- Every `RenderSystem.*` / `GlStateManager.*` call that vanilla makes thereafter is a real GL call that lands in the dummy's 1×1 invisible framebuffer. No NPEs, no shim work, no behavior changes to vanilla code paths.
+- `Window.swapBuffers` has its `glfwSwapBuffers` call no-op'd. VK present runs from `LevelRendererMixin` every game frame and now owns the visible window uncontested.
+
+**Caveats of the dummy-context approach:**
+- Vanilla `glViewport(0, 0, mainW, mainH)` calls into a 1×1 framebuffer. Undefined per spec, but every desktop GL driver tolerates oversized viewports (output gets clipped). On obscure drivers this could misbehave.
+- `glReadPixels` for screenshots returns the dummy's garbage — broken until we wire MC's screenshot path through VK. Not a P0.
+- We pay the cost of MC's full GL command stream every frame for nothing. Phase 1.4+ should `CANCEL_VANILLA` deeper into `GameRenderer` to short-circuit the work.
 
 ---
 

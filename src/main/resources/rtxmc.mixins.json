@@ -3,6 +3,7 @@
   "package": "com.rtxmc.mixin",
   "compatibilityLevel": "JAVA_21",
   "client": [
+    "WindowMixin",
     "MinecraftClientMixin",
     "LevelRendererMixin",
     "GameRendererMixin"
