@@ -75,6 +75,18 @@ private:
     VkDeviceMemory             tlas_memory_  = VK_NULL_HANDLE;
     bool                       tlas_dirty_   = false;
     int                        log_budget_   = 8;
+
+    // Phase 1.4.2 leak-on-replace: when a section re-meshes, the previous
+    // VkBuffer/VkDeviceMemory can't be safely freed inline — the render
+    // thread may still hold the handle in an in-flight command buffer.
+    // We orphan them into this list and only free at destroy() under
+    // vkDeviceWaitIdle. Phase 1.4.3 replaces this with proper deferred
+    // deletion keyed on frame fences.
+    struct OrphanedResources {
+        VkBuffer       buffer;
+        VkDeviceMemory memory;
+    };
+    std::vector<OrphanedResources> leaked_;
 };
 
 BvhStore& bvh();

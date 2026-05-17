@@ -69,10 +69,14 @@ void BvhStore::upload_chunk(int cx, int cy, int cz,
 
     std::lock_guard<std::mutex> guard(mutex_);
 
-    // Tear down any previous incarnation of this section.
+    // Orphan any previous incarnation. Cannot free inline — the render
+    // thread may have this VkBuffer queued in an in-flight command buffer.
+    // Leak-on-replace deliberate; Phase 1.4.3 wires proper deferred deletion.
     auto it = chunks_.find(k);
     if (it != chunks_.end()) {
-        free_chunk(it->second);
+        if (it->second.buffer || it->second.memory) {
+            leaked_.push_back({it->second.buffer, it->second.memory});
+        }
         chunks_.erase(it);
     }
 
@@ -148,7 +152,10 @@ void BvhStore::remove_chunk(int cx, int cy, int cz) {
     std::lock_guard<std::mutex> guard(mutex_);
     auto it = chunks_.find({cx, cy, cz});
     if (it == chunks_.end()) return;
-    free_chunk(it->second);
+    // Same lifetime hazard as upload_chunk's replacement path — orphan, don't free.
+    if (it->second.buffer || it->second.memory) {
+        leaked_.push_back({it->second.buffer, it->second.memory});
+    }
     chunks_.erase(it);
     tlas_dirty_ = true;
 }
@@ -170,10 +177,21 @@ void BvhStore::update_tlas(VkCommandBuffer cmd) {
 void BvhStore::destroy() {
     std::lock_guard<std::mutex> guard(mutex_);
     auto& c = ctx();
+
+    // Wait for GPU to finish — guarantees no command buffer still references
+    // any of our VkBuffers, so it's safe to free everything including the
+    // orphaned leak list.
+    if (c.device) vkDeviceWaitIdle(c.device);
+
     for (auto& [_, b] : chunks_) {
         free_chunk(b);
     }
     chunks_.clear();
+    for (auto& o : leaked_) {
+        if (o.buffer) vkDestroyBuffer(c.device, o.buffer, nullptr);
+        if (o.memory) vkFreeMemory(c.device, o.memory, nullptr);
+    }
+    leaked_.clear();
     if (tlas_)        c.ext.vkDestroyAccelerationStructureKHR(c.device, tlas_, nullptr);
     if (tlas_buffer_) vkDestroyBuffer(c.device, tlas_buffer_, nullptr);
     if (tlas_memory_) vkFreeMemory(c.device, tlas_memory_, nullptr);
