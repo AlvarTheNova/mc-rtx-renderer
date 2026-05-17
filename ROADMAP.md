@@ -32,10 +32,15 @@ Realistic subdivision — original "Phase 1" was 2-3 months of work, not weeks.
 - [ ] **First-boot validation (manual, blocks exit):** verify mixin signatures match Yarn 1.21.11 in a real Loom dev run; confirm clear color is visible; confirm main menu/GUI don't crash on dummy ctx
 - [ ] **Exit:** MC boots, VK animated clear color visible on screen, no GL/VK contention
 
-### 1.3 — Raster triangle (~2 days)
-- [ ] Minimal VK graphics pipeline (vert + frag), one textured triangle from a vertex buffer
-- [ ] Per-frame UBO with view/proj matrices wired to MC camera
-- [ ] **Exit:** a debug triangle pinned at world origin, follows MC camera correctly
+### 1.3 — Raster triangle  ◄ current
+- [x] GLSL → SPIR-V at native build time (CMake `add_spirv_shader` via `glslangValidator --vn`, embedded as C arrays)
+- [x] VK 1.3 dynamic rendering — no render pass / framebuffer needed
+- [x] Push-constant view + proj matrices (avoids descriptor-set boilerplate; 128 bytes, sits right at the minimum guarantee)
+- [x] Vertices baked into shader via `gl_VertexIndex` (no vertex buffer yet)
+- [x] Two-sided triangle at world `(0, 100, 0)`, ~10m wide, RGB-shaded
+- [x] `dynamicRendering` + `synchronization2` enabled at device creation (VkPhysicalDeviceVulkan13Features)
+- [ ] **First-boot validation:** confirm triangle is visible from MC camera, colors follow rotation/movement
+- [ ] **Exit:** debug triangle pinned at world origin, follows MC camera correctly
 
 ### 1.4 — Chunk rasterizer (~2 weeks)
 - [ ] Hook `ChunkBuilder` mesh outputs, translate vanilla format → our packed vertex format

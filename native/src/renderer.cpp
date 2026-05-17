@@ -3,11 +3,11 @@
 #include "path_tracer.h"
 #include "voxel_bvh.h"
 #include "streamline_integration.h"
+#include "triangle.h"
 
 #include <array>
 #include <cstdarg>
 #include <cstdio>
-#include <cmath>
 
 namespace rtxmc {
 
@@ -23,6 +23,7 @@ struct FrameSync {
 };
 
 PathTracer g_tracer;
+Triangle   g_triangle;
 VkCommandPool g_cmd_pool = VK_NULL_HANDLE;
 std::array<FrameSync, FRAMES_IN_FLIGHT> g_frames{};
 uint32_t g_frame_idx     = 0;
@@ -81,19 +82,6 @@ void destroy_per_frame_resources() {
     if (g_cmd_pool) { vkDestroyCommandPool(c.device, g_cmd_pool, nullptr); g_cmd_pool = VK_NULL_HANDLE; }
 }
 
-// Phase 1.1 placeholder: animate the clear color so a visual diff would
-// prove VK output is alive *if* GL weren't winning the swapchain race.
-// Phase 1.2 (GL suppression) is what actually makes these pixels visible.
-VkClearColorValue animated_clear() {
-    float t = (float)g_frame_counter * 0.01f;
-    return {{
-        0.5f + 0.5f * std::sin(t * 1.0f),
-        0.5f + 0.5f * std::sin(t * 1.3f + 2.0f),
-        0.5f + 0.5f * std::sin(t * 0.7f + 4.0f),
-        1.0f,
-    }};
-}
-
 void transition_image(VkCommandBuffer cmd, VkImage img,
                       VkImageLayout from, VkImageLayout to,
                       VkPipelineStageFlags2 src_stage, VkAccessFlags2 src_access,
@@ -129,6 +117,7 @@ int rtx_init(void* hwnd, int w, int h) {
     if (!bvh().init())                          return 2;
     if (!g_tracer.init())                       return 3;
     if (!create_per_frame_resources())          return 4;
+    if (!g_triangle.init(c.swap_format))        return 5;
 
     g_tracer.resize(c.swap_extent, c.swap_extent);
     log("rtx_init complete (device=%s)", c.phys_name);
@@ -140,6 +129,8 @@ void rtx_resize(int w, int h) {
     ctx().resize(w, h);
     g_tracer.resize(ctx().swap_extent, ctx().swap_extent);
     g_swapchain_dirty = false;
+    // Triangle pipeline is format-bound; the format doesn't change on resize,
+    // only the extent (which is dynamic state), so no pipeline rebuild needed.
 }
 
 void rtx_render_frame(const FrameParams& params) {
@@ -150,12 +141,10 @@ void rtx_render_frame(const FrameParams& params) {
 
     vkWaitForFences(c.device, 1, &f.in_flight, VK_TRUE, UINT64_MAX);
 
-    // Acquire next swapchain image
     uint32_t img_idx = 0;
     VkResult ar = vkAcquireNextImageKHR(c.device, c.swapchain, UINT64_MAX,
                                         f.image_available, VK_NULL_HANDLE, &img_idx);
     if (ar == VK_ERROR_OUT_OF_DATE_KHR) {
-        // Surface size changed — defer to next rtx_resize. Skip this frame.
         g_swapchain_dirty = true;
         return;
     } else if (ar != VK_SUCCESS && ar != VK_SUBOPTIMAL_KHR) {
@@ -170,33 +159,46 @@ void rtx_render_frame(const FrameParams& params) {
     bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     vkBeginCommandBuffer(f.cmd, &bi);
 
-    // TODO Phase 3: bvh().update_tlas(f.cmd); g_tracer.record(f.cmd, params);
-    // Phase 1.1 stops here — clear + present.
-    (void)params;
-
     VkImage img = c.swap_images[img_idx];
 
+    // UNDEFINED → COLOR_ATTACHMENT_OPTIMAL for dynamic rendering
     transition_image(f.cmd, img,
-        VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, 0,
-        VK_PIPELINE_STAGE_2_CLEAR_BIT,       VK_ACCESS_2_TRANSFER_WRITE_BIT);
+        VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,           0,
+        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
 
-    VkClearColorValue clear = animated_clear();
-    VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-    vkCmdClearColorImage(f.cmd, img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                         &clear, 1, &range);
+    // VK 1.3 dynamic rendering — no render pass / framebuffer needed.
+    VkRenderingAttachmentInfo color_att{VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
+    color_att.imageView   = c.swap_views[img_idx];
+    color_att.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    color_att.loadOp      = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    color_att.storeOp     = VK_ATTACHMENT_STORE_OP_STORE;
+    color_att.clearValue.color = {{0.08f, 0.10f, 0.14f, 1.0f}}; // dark slate so triangle pops
 
+    VkRenderingInfo render_info{VK_STRUCTURE_TYPE_RENDERING_INFO};
+    render_info.renderArea.extent  = c.swap_extent;
+    render_info.layerCount         = 1;
+    render_info.colorAttachmentCount = 1;
+    render_info.pColorAttachments  = &color_att;
+
+    vkCmdBeginRendering(f.cmd, &render_info);
+    g_triangle.record(f.cmd, params.view, params.proj, c.swap_extent);
+    vkCmdEndRendering(f.cmd);
+
+    // TODO Phase 3: bvh().update_tlas(f.cmd); g_tracer.record(f.cmd, params);
+    (void)params;
+
+    // COLOR_ATTACHMENT_OPTIMAL → PRESENT_SRC
     transition_image(f.cmd, img,
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-        VK_PIPELINE_STAGE_2_CLEAR_BIT,         VK_ACCESS_2_TRANSFER_WRITE_BIT,
-        VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, 0);
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,    0);
 
     vkEndCommandBuffer(f.cmd);
 
-    // Submit: wait on image_available before the clear writes, signal render_finished
     VkSemaphoreSubmitInfo wait_si{VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO};
     wait_si.semaphore = f.image_available;
-    wait_si.stageMask = VK_PIPELINE_STAGE_2_CLEAR_BIT;
+    wait_si.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
 
     VkSemaphoreSubmitInfo sig_si{VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO};
     sig_si.semaphore = f.render_finished;
@@ -232,6 +234,7 @@ void rtx_shutdown() {
     log("rtx_shutdown");
     auto& c = ctx();
     if (c.device) vkDeviceWaitIdle(c.device);
+    g_triangle.destroy();
     g_tracer.destroy();
     bvh().destroy();
     sl().destroy();

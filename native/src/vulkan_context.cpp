@@ -165,8 +165,16 @@ bool create_device(VulkanContext& c) {
     dif.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
     dif.pNext = &bdaf;
 
+    // VK 1.3 dynamic rendering — lets us skip render passes / framebuffers.
+    // Synchronization2 is the modern barrier API we already use.
+    VkPhysicalDeviceVulkan13Features v13{
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
+    v13.dynamicRendering = VK_TRUE;
+    v13.synchronization2 = VK_TRUE;
+    v13.pNext = &dif;
+
     VkPhysicalDeviceFeatures2 f2{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
-    f2.pNext = &dif;
+    f2.pNext = &v13;
 
     VkDeviceCreateInfo di{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
     di.pNext                   = &f2;
