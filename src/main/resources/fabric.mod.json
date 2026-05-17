@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "rtxmc",
+  "version": "${version}",
+  "name": "mc-rtx-renderer",
+  "description": "Vulkan + path tracing + DLSS 4 renderer for Minecraft Java",
+  "authors": ["ryanl"],
+  "license": "TBD",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["com.rtxmc.RtxMod"]
+  },
+  "mixins": [
+    "rtxmc.mixins.json"
+  ],
+  "accessWidener": "rtxmc.accesswidener",
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "fabric-api": "*",
+    "minecraft": "${mc_version}",
+    "java": ">=21"
+  }
+}

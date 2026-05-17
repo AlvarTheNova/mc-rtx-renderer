@@ -1,0 +1,8 @@
+accessWidener	v2	named
+
+# Widen vanilla render internals we need to reach from VulkanRenderer.
+# Names are Yarn-mapped; switch to Mojang official mappings if you swap loom config.
+
+accessible	class	net/minecraft/client/render/WorldRenderer
+accessible	class	net/minecraft/client/render/chunk/ChunkBuilder
+accessible	field	net/minecraft/client/MinecraftClient	window	Lnet/minecraft/client/util/Window;

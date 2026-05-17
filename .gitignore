@@ -1,0 +1,30 @@
+# Gradle / Loom
+.gradle/
+build/
+.idea/
+*.iml
+out/
+run/
+
+# CMake / native
+native/build/
+native/CMakeFiles/
+native/CMakeCache.txt
+native/cmake_install.cmake
+native/Makefile
+*.obj
+*.dll
+*.lib
+*.pdb
+*.exp
+
+# Streamline SDK (vendored locally, do not commit)
+streamline/
+
+# Shader build artifacts
+shaders/*.spv
+
+# OS junk
+Thumbs.db
+desktop.ini
+.DS_Store
