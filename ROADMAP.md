@@ -125,10 +125,31 @@ Realistic subdivision — original "Phase 1" was 2-3 months of work, not weeks.
 - [x] **Cataloged:** 54 unique render layers in a basic creative session, 5+ vertex format variants, ~100 draws/frame. Documented in memory.
 
 #### 1.5.2 — First mob (~multi-session)
-- [ ] Steal BufferBuilder vertex bytes without breaking vanilla's draw (accessor / reflection on private BufferBuilder fields, since vanilla calls `end()` immediately)
-- [ ] Per-vertex-format pipeline variants (start with the 36 B entity format)
-- [ ] Per-layer texture binding (descriptor pool sized for many)
-- [ ] **Exit:** at least one mob visible (zombie / cow / pig in front of camera)
+
+##### 1.5.2a — Steal entity bytes  ✓ done
+- [x] `EntityBatchContext` ThreadLocal differentiates Immediate.draw batches from chunk-mesher `endNullable()` calls
+- [x] `VertexConsumerProviderMixin` sets / clears context on `Immediate.draw(RenderLayer)` HEAD / RETURN
+- [x] `BufferBuilderEndMixin` `@At("RETURN")` of both `end()` AND `endNullable()` (vanilla uses the latter), copies bytes when context is set, returns BuiltBuffer untouched (vanilla unaffected)
+- [x] `NativeBridge.uploadEntityBatch(layerHash, bytes)` + native log
+- [x] **Validated:** entity_translucent layer flowing with format `[Position, Color, UV0, UV1, UV2, Normal]` (36 B/vert)
+
+##### 1.5.2b — First mob visible (next session)
+- [ ] Native side: per-frame transient `VkBuffer` per layer (cleared each frame)
+- [ ] Entity vertex format: 36 B = chunk format + UV1 (overlay coords)
+- [ ] New `entity_renderer.cpp` with 36 B pipeline variant, reuse atlas descriptor for now
+- [ ] Render order: chunks → entities → triangle overlay
+- [ ] **Exit:** at least one mob/item visible (texture won't be right since entities use their own textures — that's 1.5.2d)
+
+##### 1.5.2c — Vertex format variants
+- [ ] Glint pipeline (Position + UV0 = 20 B, additive blend)
+- [ ] Lines pipeline (Position + Color + Normal + LineWidth, primitive topology = LINES)
+- [ ] Debug filled box / point pipelines
+
+##### 1.5.2d — Per-layer textures (the real work)
+- [ ] Resolve each `RenderLayer`'s `Sampler0` texture binding
+- [ ] Upload per-mob skin textures (most are loaded lazily into MC's TextureManager)
+- [ ] Descriptor pool / indexing strategy for many distinct textures
+- [ ] **Exit Phase 1.5.2:** mobs rendered with correct skins
 
 #### 1.5.3+ — Coverage
 - [ ] All vertex format variants (glint additive, lines, etc.)

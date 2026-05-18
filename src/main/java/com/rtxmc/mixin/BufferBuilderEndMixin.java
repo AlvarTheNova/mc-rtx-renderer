@@ -31,7 +31,12 @@ public abstract class BufferBuilderEndMixin {
 
     private static final AtomicInteger rtxmc$logBudget = new AtomicInteger(8);
 
-    @Inject(method = "end()Lnet/minecraft/client/render/BuiltBuffer;",
+    // Target BOTH end() and endNullable() — vanilla's private
+    // VertexConsumerProvider$Immediate.draw uses endNullable().
+    @Inject(method = {
+                "end()Lnet/minecraft/client/render/BuiltBuffer;",
+                "endNullable()Lnet/minecraft/client/render/BuiltBuffer;"
+            },
             at = @At("RETURN"))
     private void rtxmc$captureEntityBatch(CallbackInfoReturnable<BuiltBuffer> cir) {
         RenderLayer layer = EntityBatchContext.get();
