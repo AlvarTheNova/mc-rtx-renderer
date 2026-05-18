@@ -10,7 +10,8 @@
     "LevelRendererMixin",
     "GameRendererMixin",
     "SectionBuilderMixin",
-    "SpriteAtlasMixin"
+    "SpriteAtlasMixin",
+    "VertexConsumerProviderMixin"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -117,12 +117,24 @@ Realistic subdivision — original "Phase 1" was 2-3 months of work, not weeks.
 - [ ] Port Sodium's algorithm OR stay with MC's per-face meshes if perf is acceptable
 - [ ] **Exit Phase 1.4:** chunks render at vanilla visual parity
 
-### 1.5 — Entities + particles + block entities (~2 weeks)
-- [ ] Entity model upload (vanilla model JSONs → VK mesh)
-- [ ] Skeletal animation in vertex shader
-- [ ] Particle batched sprites
-- [ ] BlockEntity adapter (chests, signs, beds, banners)
-- [ ] **Exit:** mobs animate, particles work, chests open
+### 1.5 — Entities + particles + block entities
+
+#### 1.5.1 — Discovery  ✓ done
+- [x] Found the centralised batched-draw chokepoint: `VertexConsumerProvider$Immediate.draw(RenderLayer)`
+- [x] Mixin observes (without consuming) — log-only
+- [x] **Cataloged:** 54 unique render layers in a basic creative session, 5+ vertex format variants, ~100 draws/frame. Documented in memory.
+
+#### 1.5.2 — First mob (~multi-session)
+- [ ] Steal BufferBuilder vertex bytes without breaking vanilla's draw (accessor / reflection on private BufferBuilder fields, since vanilla calls `end()` immediately)
+- [ ] Per-vertex-format pipeline variants (start with the 36 B entity format)
+- [ ] Per-layer texture binding (descriptor pool sized for many)
+- [ ] **Exit:** at least one mob visible (zombie / cow / pig in front of camera)
+
+#### 1.5.3+ — Coverage
+- [ ] All vertex format variants (glint additive, lines, etc.)
+- [ ] Particles (separate mesh path — TBD)
+- [ ] Block entities (chests, signs — partial overlap with entity renderer)
+- [ ] **Exit Phase 1.5:** parity with vanilla entity rendering
 
 ### 1.6 — HUD compositor + vanilla post (~3 days)
 - [ ] VK reimplementation of `GuiGraphics` (sprite batcher, text via MC's font atlas)
