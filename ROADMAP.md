@@ -106,10 +106,12 @@ Realistic subdivision — original "Phase 1" was 2-3 months of work, not weeks.
 - [x] Render-pass order: SOLID → CUTOUT → TRIPWIRE (opaque) → TRANSLUCENT
 - [x] **Validated:** leaves on trees, water in oceans, tall grass / vines / flowers — visible. World looks visually complete (within "no sky / no entities" caveats).
 
-#### 1.4.5 — Frustum culling
-- [ ] Per-section AABB
-- [ ] Frustum extraction from MC's projection (we have it via FrameParams)
-- [ ] Skip sections fully outside frustum
+#### 1.4.5 — Frustum culling  ◄ current
+- [x] `frustum.h` header-only: Gribb-Hartmann 6-plane extraction from view*proj, normalize, AABB-outside test using "n-vertex" picking
+- [x] Per-frame frustum compute in `rtx_render_frame`; per-section 16³ AABB at (cx*16, cy*16, cz*16)
+- [x] Skip `chunk_renderer.record()` if AABB fully outside; otherwise draw
+- [x] Periodic stats log (every 600 frames ≈ 10 s) shows drawn vs culled count
+- [ ] **First-boot validate:** visually identical output, log shows >50% cull when player looks at limited horizon
 
 #### 1.4.6 — Greedy meshing (optional perf)
 - [ ] Port Sodium's algorithm OR stay with MC's per-face meshes if perf is acceptable

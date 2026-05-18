@@ -6,6 +6,7 @@
 #include "triangle.h"
 #include "chunk_renderer.h"
 #include "atlas.h"
+#include "frustum.h"
 
 #include <array>
 #include <cstdarg>
@@ -311,6 +312,15 @@ void rtx_render_frame(const FrameParams& params) {
         bool index_buffer_bound = false;
         const uint32_t max_indices = bvh().shared_quad_index_capacity_indices();
 
+        // Phase 1.4.5: frustum cull. Extract 6 planes from MC's proj * view
+        // once per frame; test each section's world-space AABB. The clip-fix
+        // applied in the shader doesn't affect which world points are in the
+        // visibility envelope, so we use MC's matrices directly here.
+        FrustumPlanes frustum;
+        extract_frustum_planes(params.view, params.proj, frustum);
+
+        uint32_t drawn = 0, culled = 0;
+
         auto draw_layer = [&](int layer, bool translucent) {
             const auto& draws = layer_draws[layer];
             if (draws.empty()) return;
@@ -324,6 +334,17 @@ void rtx_render_frame(const FrameParams& params) {
             for (const auto& d : draws) {
                 const uint32_t needed = (d.vertex_count / 4) * 6;
                 if (needed > max_indices) continue;
+
+                // Section AABB in world coords (16³ box at section origin).
+                const float mn[3] = {(float)(d.cx * 16),
+                                     (float)(d.cy * 16),
+                                     (float)(d.cz * 16)};
+                const float mx[3] = {mn[0] + 16.0f, mn[1] + 16.0f, mn[2] + 16.0f};
+                if (aabb_outside_frustum(frustum, mn, mx)) {
+                    ++culled;
+                    continue;
+                }
+                ++drawn;
                 g_chunks.record(f.cmd, params.view, params.proj,
                                 d.cx, d.cy, d.cz, d.buffer, d.vertex_count);
             }
@@ -336,6 +357,15 @@ void rtx_render_frame(const FrameParams& params) {
         draw_layer(LAYER_TRIPWIRE, /*translucent*/ false);
         // Translucent pass — TRANSLUCENT (water, stained glass).
         draw_layer(LAYER_TRANSLUCENT, /*translucent*/ true);
+
+        // One-shot cull stats line (every 600 frames ≈ once every 10 s @60fps).
+        static uint64_t s_last_log = 0;
+        if (g_frame_counter - s_last_log >= 600) {
+            log("frustum cull: drew %u sections, culled %u (%.0f%%)",
+                drawn, culled,
+                (drawn + culled) ? (100.0 * culled / (drawn + culled)) : 0.0);
+            s_last_log = g_frame_counter;
+        }
     }
 
     // Sanity triangle on top (always-visible NDC sentinel + world triangle).
