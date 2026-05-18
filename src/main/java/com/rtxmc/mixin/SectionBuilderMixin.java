@@ -76,6 +76,37 @@ public abstract class SectionBuilderMixin {
                     pos.getX(), pos.getY(), pos.getZ(),
                     dp.vertexCount(), size,
                     dp.format(), dp.mode(), dp.indexCount());
+
+            // Hex dump first 4 vertices (one quad's worth, 128 bytes) so we
+            // can decode what's actually in the vertex stream.
+            int dumpBytes = Math.min(128, size);
+            StringBuilder sb = new StringBuilder("rtxmc chunk first quad bytes: ");
+            for (int i = 0; i < dumpBytes; ++i) {
+                if (i > 0 && i % 32 == 0) sb.append("\n  vert").append(i / 32).append(": ");
+                else if (i == 0) sb.append("\n  vert0: ");
+                else if (i % 4 == 0) sb.append(" ");
+                sb.append(String.format("%02x", copy.get(i) & 0xFF));
+            }
+            RtxMod.LOG.info(sb.toString());
+
+            // Also decode each vertex's expected fields under my assumed layout
+            for (int v = 0; v < 4; ++v) {
+                int b = v * 32;
+                float px = copy.getFloat(b + 0);
+                float py = copy.getFloat(b + 4);
+                float pz = copy.getFloat(b + 8);
+                int colorPack = copy.getInt(b + 12);
+                float u0 = copy.getFloat(b + 16);
+                float v0 = copy.getFloat(b + 20);
+                short uv2x = copy.getShort(b + 24);
+                short uv2y = copy.getShort(b + 26);
+                byte nx = copy.get(b + 28);
+                byte ny = copy.get(b + 29);
+                byte nz = copy.get(b + 30);
+                byte pad = copy.get(b + 31);
+                RtxMod.LOG.info("  vert{}: pos=({},{},{}) color=0x{} uv0=({},{}) uv2=({},{}) n=({},{},{}) pad=0x{}",
+                        v, px, py, pz, Integer.toHexString(colorPack), u0, v0, uv2x, uv2y, nx, ny, nz, Integer.toHexString(pad & 0xFF));
+            }
         }
     }
 }
