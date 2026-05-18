@@ -60,6 +60,8 @@ public abstract class SpriteAtlasMixin {
         int nullImage = 0;
         int emptyPixels = 0;
         long totalPixels = 0;
+        int minX = Integer.MAX_VALUE, maxX = 0, minY = Integer.MAX_VALUE, maxY = 0;
+        int spritesAbove1000x = 0, spritesAbove1000y = 0;
         for (Sprite s : sprites.values()) {
             NativeImage img = s.getContents().image;
             if (img == null) { ++nullImage; continue; }
@@ -68,6 +70,13 @@ public abstract class SpriteAtlasMixin {
             final int sy = s.getY();
             final int sw = img.getWidth();
             final int sh = img.getHeight();
+
+            minX = Math.min(minX, sx);
+            maxX = Math.max(maxX, sx + sw);
+            minY = Math.min(minY, sy);
+            maxY = Math.max(maxY, sy + sh);
+            if (sx > 1000) ++spritesAbove1000x;
+            if (sy > 1000) ++spritesAbove1000y;
             int[] px;
             try {
                 px = img.copyPixelsArgb();

@@ -16,8 +16,9 @@ layout(location = 0) out vec4 out_color;
 const vec3 SUN_DIR = normalize(vec3(0.4, 1.0, 0.3));
 
 void main() {
-    // v_uv0 here is now POSITION-DERIVED (see vert shader). If we see smooth
-    // R→G gradients per chunk face, attribute interpolation works fine and
-    // the specific in_uv0 attribute read in vert was the broken thing.
-    out_color = vec4(v_uv0.x, v_uv0.y, 0.5, 1.0);
+    vec4 tex = texture(u_atlas, v_uv0);
+    if (tex.a < 0.05) discard;
+    float ndotl = max(dot(v_normal, SUN_DIR), 0.0);
+    float lighting = 0.25 + 0.5 * ndotl + 0.25 * v_lightCombined;
+    out_color = vec4(tex.rgb * v_color * lighting, tex.a);
 }
