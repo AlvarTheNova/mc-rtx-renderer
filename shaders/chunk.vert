@@ -44,7 +44,11 @@ void main() {
 
     // Color: u8 RGBA → linear [0,1].
     v_color = vec3(in_color.rgb) * (1.0 / 255.0);
-    v_uv0   = in_uv0;
+    // DIAGNOSTIC: replace UV0 with position-derived UV. If fragment shader
+    // sees smooth gradients per face now, the attribute interpolation path
+    // works and the specific in_uv0 read was broken. If still uniform/yellow,
+    // even this fallback interpolates wrong.
+    v_uv0   = vec2(in_pos.x / 16.0, in_pos.z / 16.0);
 
     // Normal: i8 packed in low 24 bits, treat as signed byte → [-1, 1].
     // (We treat the input as uvec4, so reinterpret components > 127 as negative.)
