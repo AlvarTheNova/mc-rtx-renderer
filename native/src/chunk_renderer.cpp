@@ -40,6 +40,49 @@ bool ChunkRenderer::init(VkFormat color_format, VkFormat depth_format) {
     VkShaderModule fs = make_module(c.device, spirv_chunk_frag, sizeof(spirv_chunk_frag));
     if (!vs || !fs) return false;
 
+    // Descriptor set layout: one combined image sampler (atlas) at set 0 binding 0.
+    VkDescriptorSetLayoutBinding dslb{};
+    dslb.binding         = 0;
+    dslb.descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    dslb.descriptorCount = 1;
+    dslb.stageFlags      = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    VkDescriptorSetLayoutCreateInfo dslci{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+    dslci.bindingCount = 1;
+    dslci.pBindings    = &dslb;
+    if (vkCreateDescriptorSetLayout(c.device, &dslci, nullptr, &dsl_) != VK_SUCCESS) {
+        log("vkCreateDescriptorSetLayout (chunk) failed");
+        vkDestroyShaderModule(c.device, vs, nullptr);
+        vkDestroyShaderModule(c.device, fs, nullptr);
+        return false;
+    }
+
+    // Descriptor pool — we only need one set total.
+    VkDescriptorPoolSize psz{};
+    psz.type            = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    psz.descriptorCount = 1;
+    VkDescriptorPoolCreateInfo dpci{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
+    dpci.maxSets       = 1;
+    dpci.poolSizeCount = 1;
+    dpci.pPoolSizes    = &psz;
+    if (vkCreateDescriptorPool(c.device, &dpci, nullptr, &dpool_) != VK_SUCCESS) {
+        log("vkCreateDescriptorPool (chunk) failed");
+        vkDestroyShaderModule(c.device, vs, nullptr);
+        vkDestroyShaderModule(c.device, fs, nullptr);
+        return false;
+    }
+
+    VkDescriptorSetAllocateInfo dsai{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+    dsai.descriptorPool     = dpool_;
+    dsai.descriptorSetCount = 1;
+    dsai.pSetLayouts        = &dsl_;
+    if (vkAllocateDescriptorSets(c.device, &dsai, &dset_) != VK_SUCCESS) {
+        log("vkAllocateDescriptorSets (chunk) failed");
+        vkDestroyShaderModule(c.device, vs, nullptr);
+        vkDestroyShaderModule(c.device, fs, nullptr);
+        return false;
+    }
+
     // Push constants: view (64) + proj (64) + ivec4 sectionPos (16) = 144 B.
     // Min guaranteed maxPushConstantsSize is 128; NVIDIA supports 256+.
     VkPushConstantRange pc_range{};
@@ -48,6 +91,8 @@ bool ChunkRenderer::init(VkFormat color_format, VkFormat depth_format) {
     pc_range.size       = sizeof(float) * 16 * 2 + sizeof(int32_t) * 4;
 
     VkPipelineLayoutCreateInfo plci{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+    plci.setLayoutCount         = 1;
+    plci.pSetLayouts            = &dsl_;
     plci.pushConstantRangeCount = 1;
     plci.pPushConstantRanges    = &pc_range;
     if (vkCreatePipelineLayout(c.device, &plci, nullptr, &layout_) != VK_SUCCESS) {
@@ -169,6 +214,29 @@ bool ChunkRenderer::init(VkFormat color_format, VkFormat depth_format) {
     return true;
 }
 
+void ChunkRenderer::bind_atlas(VkImageView view, VkSampler sampler) {
+    if (!view || !sampler) { atlas_bound_ = false; return; }
+    auto& c = ctx();
+    VkDescriptorImageInfo dii{};
+    dii.sampler     = sampler;
+    dii.imageView   = view;
+    dii.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    VkWriteDescriptorSet w{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    w.dstSet          = dset_;
+    w.dstBinding      = 0;
+    w.descriptorCount = 1;
+    w.descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    w.pImageInfo      = &dii;
+    vkUpdateDescriptorSets(c.device, 1, &w, 0, nullptr);
+    atlas_bound_ = true;
+}
+
+void ChunkRenderer::bind_descriptor_set(VkCommandBuffer cmd) {
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout_,
+                            0, 1, &dset_, 0, nullptr);
+}
+
 void ChunkRenderer::record(VkCommandBuffer cmd,
                            const float view[16],
                            const float proj[16],
@@ -206,6 +274,10 @@ void ChunkRenderer::destroy() {
     auto& c = ctx();
     if (pipeline_) { vkDestroyPipeline(c.device, pipeline_, nullptr); pipeline_ = VK_NULL_HANDLE; }
     if (layout_)   { vkDestroyPipelineLayout(c.device, layout_, nullptr); layout_ = VK_NULL_HANDLE; }
+    if (dpool_)    { vkDestroyDescriptorPool(c.device, dpool_, nullptr); dpool_ = VK_NULL_HANDLE; }
+    if (dsl_)      { vkDestroyDescriptorSetLayout(c.device, dsl_, nullptr); dsl_ = VK_NULL_HANDLE; }
+    dset_ = VK_NULL_HANDLE;
+    atlas_bound_ = false;
 }
 
 } // namespace rtxmc

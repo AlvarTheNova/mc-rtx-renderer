@@ -296,20 +296,28 @@ void rtx_render_frame(const FrameParams& params) {
     VkRect2D scissor{}; scissor.extent = c.swap_extent;
     vkCmdSetScissor(f.cmd, 0, 1, &scissor);
 
+    // Lazy-bind the atlas once it's ready (it uploads on a worker thread some
+    // time after rtx_init). Cheap to call every frame — early-outs if atlas
+    // isn't ready, and bind_atlas itself is idempotent + cheap.
+    if (atlas().ready() && !g_chunks.atlas_bound()) {
+        g_chunks.bind_atlas(atlas().view(), atlas().sampler());
+    }
+
     // Chunks first (depth-tested terrain). Snapshot under mutex; iterate outside.
-    // Bind the shared quad → triangle index buffer once per render pass; each
-    // chunk draw reuses it through vkCmdDrawIndexed.
+    // Bind the shared quad → triangle index buffer + descriptor set once per
+    // render pass; each chunk draw reuses them through vkCmdDrawIndexed.
     auto draws = bvh().snapshot_for_draw();
-    if (!draws.empty()) {
+    if (!draws.empty() && g_chunks.atlas_bound()) {
         vkCmdBindIndexBuffer(f.cmd, bvh().shared_quad_index_buffer(), 0,
                              VK_INDEX_TYPE_UINT32);
-    }
-    for (const auto& d : draws) {
-        // Sanity: skip any section bigger than our shared index buffer can index.
-        const uint32_t needed_indices = (d.vertex_count / 4) * 6;
-        if (needed_indices > bvh().shared_quad_index_capacity_indices()) continue;
-        g_chunks.record(f.cmd, params.view, params.proj,
-                        d.cx, d.cy, d.cz, d.buffer, d.vertex_count);
+        g_chunks.bind_descriptor_set(f.cmd);
+        for (const auto& d : draws) {
+            // Sanity: skip any section bigger than our shared index buffer can index.
+            const uint32_t needed_indices = (d.vertex_count / 4) * 6;
+            if (needed_indices > bvh().shared_quad_index_capacity_indices()) continue;
+            g_chunks.record(f.cmd, params.view, params.proj,
+                            d.cx, d.cy, d.cz, d.buffer, d.vertex_count);
+        }
     }
 
     // Sanity triangle on top (always-visible NDC sentinel + world triangle).
