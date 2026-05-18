@@ -87,11 +87,16 @@ Realistic subdivision — original "Phase 1" was 2-3 months of work, not weeks.
 - [ ] Render-thread upload queue (workers enqueue, render thread drains)
 - [ ] Rationale for deferral: on ReBAR systems, HOST_VISIBLE memory is effectively device-local; perf cost of current path is negligible at typical section counts.
 
-#### 1.4.4 — Texture atlas
-- [ ] Extract MC's stitched block atlas (PNG)
-- [ ] Upload as VkImage + VkSampler
-- [ ] Bindless via `VK_EXT_descriptor_indexing` (already enabled in device features)
-- [ ] Map UVs from MC's vertex stream to atlas coords
+#### 1.4.4 — Texture atlas  ✓ done
+- [x] Capture MC's block atlas on `SpriteAtlasTexture.create` HEAD; iterate `StitchResult.sprites()`
+- [x] Rebuild atlas pixels client-side (`copyPixelsArgb`, ARGB→RGBA shuffle into direct ByteBuffer)
+- [x] VkImage (DEVICE_LOCAL R8G8B8A8_UNORM) + VkImageView + VkSampler (NEAREST/REPEAT)
+- [x] Staging buffer + one-shot transfer command (dedicated upload command pool, vkQueueWaitIdle)
+- [x] Descriptor set layout (set 0, combined image sampler) + pool + allocated set
+- [x] `bind_atlas()` updates descriptor set with image view + sampler; `bind_descriptor_set()` per render pass
+- [x] chunk.frag samples atlas at v_uv0, multiplies by vertex color × NdotL × stored light
+- [x] **Gotcha discovered:** `Sprite.getX()/getY()` is 16 px before actual sprite content (mipmap border). Use `round(getMinU() * atlasW)` to get the position MC's chunk UVs actually point to. Documented in memory for future renderer work.
+- [x] **First-boot validated:** proper textured Minecraft terrain — grass / stone / dirt / wood all visible through our VK path.
 
 #### 1.4.5 — Frustum culling
 - [ ] Per-section AABB

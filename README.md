@@ -4,7 +4,7 @@
 
 Fork-and-rewrite of **Minecraft Java 1.21.11** renderer using **Vulkan 1.3 + full path tracing + DLSS 4** (Super Resolution, Ray Reconstruction, Multi-Frame Generation). Target hardware: NVIDIA RTX 40/50-series.
 
-> **State:** Phase 1.4.2.5 ✓ — **Minecraft terrain renders through our Vulkan path.** Per-section VkBuffers, depth-tested chunk pipeline, shared quad→triangle index buffer, view-matrix reconstruction. Untextured (flat-shaded by vertex color × sun NdotL) and missing translucent/cutout layers, but unmistakably MC world geometry. Phase 1.4.3 (proper deferred deletion + DEVICE_LOCAL staging) and 1.4.4 (texture atlas) are next. See [ROADMAP.md](ROADMAP.md).
+> **State:** Phase 1.4.4 ✓ — **Properly textured Minecraft terrain through our Vulkan path.** Per-section VkBuffers (deferred-deletion safe), shared quad index buffer, VK 1.3 dynamic rendering with depth, block atlas in DEVICE_LOCAL VRAM, descriptor-set bound combined image sampler, real per-fragment texture sampling. Still SOLID layer only (no leaves, water, glass) and no vanilla GUI/sky. See [ROADMAP.md](ROADMAP.md).
 
 ## Read first
 
