@@ -9,6 +9,7 @@
 #include "frustum.h"
 
 #include <array>
+#include <atomic>
 #include <cstdarg>
 #include <cstdio>
 
@@ -448,6 +449,17 @@ void rtx_set_frame_generation(int f)   { sl().set_fg_factor(f); }
 
 void rtx_upload_block_atlas(int w, int h, const void* pixels, uint32_t bytes) {
     atlas().upload(w, h, pixels, bytes);
+}
+
+void rtx_upload_entity_batch(int layer_hash, const void* verts, uint32_t vbytes) {
+    // Phase 1.5.2a: log-only. Native storage + render comes in 1.5.2b.
+    (void)verts;
+    static std::atomic<int> log_budget{8};
+    int remaining = log_budget.fetch_sub(1, std::memory_order_relaxed);
+    if (remaining > 0) {
+        log("entity batch: layer_hash=0x%08x bytes=%u",
+            (uint32_t)layer_hash, vbytes);
+    }
 }
 
 } // namespace rtxmc

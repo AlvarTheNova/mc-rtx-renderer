@@ -37,6 +37,11 @@ void rtx_upload_chunk(int cx, int cy, int cz, int layer,
                       const void* vertices, uint32_t vertex_bytes);
 void rtx_remove_chunk(int cx, int cy, int cz);
 
+// Phase 1.5.2: per-frame transient entity batch. layer_hash identifies the
+// render layer (Java side: layer.toString().hashCode()).
+void rtx_upload_entity_batch(int layer_hash,
+                             const void* vertices, uint32_t vertex_bytes);
+
 // Phase 1.4.4: stitched block atlas (RGBA8 row-major).
 void rtx_upload_block_atlas(int width, int height,
                             const void* pixels, uint32_t byte_count);

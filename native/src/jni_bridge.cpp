@@ -11,6 +11,7 @@ const JNINativeMethod kBridgeMethods[] = {
     {(char*)"uploadChunk",  (char*)"(IIIILjava/nio/ByteBuffer;)V",   (void*)rtxmc_native_uploadChunk},
     {(char*)"removeChunk",  (char*)"(III)V",                          (void*)rtxmc_native_removeChunk},
     {(char*)"uploadBlockAtlas", (char*)"(IILjava/nio/ByteBuffer;)V",  (void*)rtxmc_native_uploadBlockAtlas},
+    {(char*)"uploadEntityBatch", (char*)"(ILjava/nio/ByteBuffer;)V",  (void*)rtxmc_native_uploadEntityBatch},
     {(char*)"renderFrame",  (char*)"(Ljava/nio/ByteBuffer;)V",        (void*)rtxmc_native_renderFrame},
     {(char*)"shutdown",     (char*)"()V",                             (void*)rtxmc_native_shutdown},
 };
@@ -80,6 +81,13 @@ JNIEXPORT void JNICALL rtxmc_native_uploadBlockAtlas(JNIEnv* env, jclass,
     void* p = env->GetDirectBufferAddress(pixels);
     auto bytes = (uint32_t)env->GetDirectBufferCapacity(pixels);
     rtxmc::rtx_upload_block_atlas(w, h, p, bytes);
+}
+
+JNIEXPORT void JNICALL rtxmc_native_uploadEntityBatch(JNIEnv* env, jclass,
+                                                      jint layer_hash, jobject verts) {
+    void* p = env->GetDirectBufferAddress(verts);
+    auto bytes = (uint32_t)env->GetDirectBufferCapacity(verts);
+    rtxmc::rtx_upload_entity_batch(layer_hash, p, bytes);
 }
 
 // ---- DLSS ------------------------------------------------------------------

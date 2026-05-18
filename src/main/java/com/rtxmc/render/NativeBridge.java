@@ -32,6 +32,9 @@ public final class NativeBridge {
 
     public static native void removeChunk(int chunkX, int chunkY, int chunkZ);
 
+    /** Phase 1.5.2: per-frame transient entity-batch bytes for one render layer. */
+    public static native void uploadEntityBatch(int layerHash, ByteBuffer vertices);
+
     /** Upload the stitched block atlas. RGBA8 bytes, row-major, width*height*4 bytes. */
     public static native void uploadBlockAtlas(int width, int height, ByteBuffer pixels);
 

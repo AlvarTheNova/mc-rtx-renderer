@@ -11,7 +11,8 @@
     "GameRendererMixin",
     "SectionBuilderMixin",
     "SpriteAtlasMixin",
-    "VertexConsumerProviderMixin"
+    "VertexConsumerProviderMixin",
+    "BufferBuilderEndMixin"
   ],
   "injectors": {
     "defaultRequire": 1
