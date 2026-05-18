@@ -32,15 +32,20 @@ import java.util.Map;
 @Mixin(SpriteAtlasTexture.class)
 public abstract class SpriteAtlasMixin {
 
+    // HEAD instead of TAIL: SpriteAtlasTexture.create() calls upload() internally
+    // which can release the source NativeImages back to the native allocator.
+    // Reading sprite pixels at TAIL gave a mostly-empty atlas (only lava-near-(0,0)
+    // visible). The StitchResult parameter still holds live sprites before any
+    // upload work runs.
     @Inject(method = "create(Lnet/minecraft/client/texture/SpriteLoader$StitchResult;)V",
-            at = @At("TAIL"))
+            at = @At("HEAD"))
     private void rtxmc$captureAtlas(SpriteLoader.StitchResult result, CallbackInfo ci) {
         SpriteAtlasTexture self = (SpriteAtlasTexture) (Object) this;
         if (!SpriteAtlasTexture.BLOCK_ATLAS_TEXTURE.equals(self.id)) return;
 
-        final int w = self.width;
-        final int h = self.height;
-        final Map<Identifier, Sprite> sprites = self.sprites;
+        final int w = result.width();
+        final int h = result.height();
+        final Map<Identifier, Sprite> sprites = result.sprites();
         if (sprites == null || sprites.isEmpty() || w <= 0 || h <= 0) {
             RtxMod.LOG.warn("rtxmc atlas: empty stitch ({}x{}), skipping", w, h);
             return;
@@ -52,28 +57,42 @@ public abstract class SpriteAtlasMixin {
         ByteBuffer atlas = ByteBuffer.allocateDirect(byteCount).order(ByteOrder.nativeOrder());
 
         int spritesCopied = 0;
+        int nullImage = 0;
+        int emptyPixels = 0;
+        long totalPixels = 0;
         for (Sprite s : sprites.values()) {
             NativeImage img = s.getContents().image;
-            if (img == null) continue;
+            if (img == null) { ++nullImage; continue; }
 
             final int sx = s.getX();
             final int sy = s.getY();
             final int sw = img.getWidth();
             final int sh = img.getHeight();
-            // copyPixelsArgb returns row-major int[]; each int is 0xAARRGGBB.
-            int[] px = img.copyPixelsArgb();
-            for (int y = 0; y < sh; ++y) {
+            int[] px;
+            try {
+                px = img.copyPixelsArgb();
+            } catch (Throwable t) {
+                ++nullImage;
+                continue;
+            }
+            if (px == null || px.length == 0) { ++emptyPixels; continue; }
+
+            // Animated textures stack frames vertically. Only copy the first
+            // animation frame (height = sw is the typical square assumption).
+            final int copyH = Math.min(sh, h - sy);
+            for (int y = 0; y < copyH; ++y) {
                 int dstRowStart = ((sy + y) * w + sx) * 4;
                 int srcRowStart = y * sw;
                 for (int x = 0; x < sw; ++x) {
                     atlas.putInt(dstRowStart + x * 4, argbToRgba(px[srcRowStart + x]));
                 }
             }
+            totalPixels += (long) sw * copyH;
             ++spritesCopied;
         }
 
-        RtxMod.LOG.info("rtxmc atlas: BLOCK_ATLAS_TEXTURE captured — {}x{} ({} sprites, {} bytes)",
-                w, h, spritesCopied, byteCount);
+        RtxMod.LOG.info("rtxmc atlas: BLOCK_ATLAS_TEXTURE captured — {}x{}, {} sprites total ({} copied, {} null/closed, {} empty), {} pixels written, {} buffer bytes",
+                w, h, sprites.size(), spritesCopied, nullImage, emptyPixels, totalPixels, byteCount);
 
         NativeBridge.uploadBlockAtlas(w, h, atlas);
     }
