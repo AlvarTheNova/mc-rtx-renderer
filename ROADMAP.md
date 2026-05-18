@@ -98,6 +98,14 @@ Realistic subdivision — original "Phase 1" was 2-3 months of work, not weeks.
 - [x] **Gotcha discovered:** `Sprite.getX()/getY()` is 16 px before actual sprite content (mipmap border). Use `round(getMinU() * atlasW)` to get the position MC's chunk UVs actually point to. Documented in memory for future renderer work.
 - [x] **First-boot validated:** proper textured Minecraft terrain — grass / stone / dirt / wood all visible through our VK path.
 
+#### 1.4.x — All four render layers  ✓ done
+- [x] Java mixin forwards SOLID + CUTOUT + TRANSLUCENT + TRIPWIRE with a layer ID through extended JNI
+- [x] BvhStore tracks chunks per (layer, ChunkKey) — `std::array<unordered_map, LAYER_COUNT>`
+- [x] ChunkRenderer builds two pipelines (opaque + translucent) sharing one layout/descriptor set
+- [x] Translucent pipeline: depth-test on, depth-write **off**, standard alpha blend
+- [x] Render-pass order: SOLID → CUTOUT → TRIPWIRE (opaque) → TRANSLUCENT
+- [x] **Validated:** leaves on trees, water in oceans, tall grass / vines / flowers — visible. World looks visually complete (within "no sky / no entities" caveats).
+
 #### 1.4.5 — Frustum culling
 - [ ] Per-section AABB
 - [ ] Frustum extraction from MC's projection (we have it via FrameParams)
