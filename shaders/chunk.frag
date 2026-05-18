@@ -16,12 +16,15 @@ layout(location = 0) out vec4 out_color;
 const vec3 SUN_DIR = normalize(vec3(0.4, 1.0, 0.3));
 
 void main() {
-    // Diagnostic: paint the ENTIRE atlas across the screen, ignoring vertex UVs.
-    // Maps screen pixel (x, y) to atlas UV. If we see actual MC block textures
-    // tiled across visible chunks, atlas reconstruction is correct and the bug
-    // is elsewhere. If we see mostly black with one lava patch, atlas content
-    // itself is bad.
-    vec2 atlas_uv = gl_FragCoord.xy / vec2(2048.0);
-    vec4 tex = texture(u_atlas, atlas_uv);
-    out_color = vec4(tex.rgb, 1.0);
+    // Atlas painted-to-screen diagnostic confirmed atlas content is fine.
+    // Bug must be in sampling — most likely V-flip between MC's GL-convention
+    // UVs (origin bottom-left) and Vulkan's texture sampling (origin top-left).
+    //
+    // Sample with V flipped. If textures look right, V-flip is the fix.
+    vec2 uv = vec2(v_uv0.x, 1.0 - v_uv0.y);
+    vec4 tex = texture(u_atlas, uv);
+
+    float ndotl = max(dot(v_normal, SUN_DIR), 0.0);
+    float lighting = 0.25 + 0.5 * ndotl + 0.25 * v_lightCombined;
+    out_color = vec4(tex.rgb * v_color * lighting, 1.0);
 }
