@@ -36,10 +36,6 @@ VkShaderModule make_module(VkDevice dev, const uint32_t* code, size_t bytes) {
 bool ChunkRenderer::init(VkFormat color_format, VkFormat depth_format) {
     auto& c = ctx();
 
-    VkShaderModule vs = make_module(c.device, spirv_chunk_vert, sizeof(spirv_chunk_vert));
-    VkShaderModule fs = make_module(c.device, spirv_chunk_frag, sizeof(spirv_chunk_frag));
-    if (!vs || !fs) return false;
-
     // Descriptor set layout: one combined image sampler (atlas) at set 0 binding 0.
     VkDescriptorSetLayoutBinding dslb{};
     dslb.binding         = 0;
@@ -52,12 +48,10 @@ bool ChunkRenderer::init(VkFormat color_format, VkFormat depth_format) {
     dslci.pBindings    = &dslb;
     if (vkCreateDescriptorSetLayout(c.device, &dslci, nullptr, &dsl_) != VK_SUCCESS) {
         log("vkCreateDescriptorSetLayout (chunk) failed");
-        vkDestroyShaderModule(c.device, vs, nullptr);
-        vkDestroyShaderModule(c.device, fs, nullptr);
         return false;
     }
 
-    // Descriptor pool — we only need one set total.
+    // Descriptor pool — one set total (atlas is shared across opaque/translucent).
     VkDescriptorPoolSize psz{};
     psz.type            = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     psz.descriptorCount = 1;
@@ -67,8 +61,6 @@ bool ChunkRenderer::init(VkFormat color_format, VkFormat depth_format) {
     dpci.pPoolSizes    = &psz;
     if (vkCreateDescriptorPool(c.device, &dpci, nullptr, &dpool_) != VK_SUCCESS) {
         log("vkCreateDescriptorPool (chunk) failed");
-        vkDestroyShaderModule(c.device, vs, nullptr);
-        vkDestroyShaderModule(c.device, fs, nullptr);
         return false;
     }
 
@@ -78,13 +70,10 @@ bool ChunkRenderer::init(VkFormat color_format, VkFormat depth_format) {
     dsai.pSetLayouts        = &dsl_;
     if (vkAllocateDescriptorSets(c.device, &dsai, &dset_) != VK_SUCCESS) {
         log("vkAllocateDescriptorSets (chunk) failed");
-        vkDestroyShaderModule(c.device, vs, nullptr);
-        vkDestroyShaderModule(c.device, fs, nullptr);
         return false;
     }
 
     // Push constants: view (64) + proj (64) + ivec4 sectionPos (16) = 144 B.
-    // Min guaranteed maxPushConstantsSize is 128; NVIDIA supports 256+.
     VkPushConstantRange pc_range{};
     pc_range.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
     pc_range.offset     = 0;
@@ -97,10 +86,24 @@ bool ChunkRenderer::init(VkFormat color_format, VkFormat depth_format) {
     plci.pPushConstantRanges    = &pc_range;
     if (vkCreatePipelineLayout(c.device, &plci, nullptr, &layout_) != VK_SUCCESS) {
         log("vkCreatePipelineLayout (chunk) failed");
-        vkDestroyShaderModule(c.device, vs, nullptr);
-        vkDestroyShaderModule(c.device, fs, nullptr);
         return false;
     }
+
+    if (!build_pipeline(pipeline_opaque_,     color_format, depth_format, /*translucent*/ false)) return false;
+    if (!build_pipeline(pipeline_translucent_, color_format, depth_format, /*translucent*/ true))  return false;
+
+    log("chunk pipelines created (opaque + translucent, color=%d depth=%d)",
+        (int)color_format, (int)depth_format);
+    return true;
+}
+
+bool ChunkRenderer::build_pipeline(VkPipeline& out, VkFormat color_format, VkFormat depth_format,
+                                   bool translucent) {
+    auto& c = ctx();
+
+    VkShaderModule vs = make_module(c.device, spirv_chunk_vert, sizeof(spirv_chunk_vert));
+    VkShaderModule fs = make_module(c.device, spirv_chunk_frag, sizeof(spirv_chunk_frag));
+    if (!vs || !fs) return false;
 
     VkPipelineShaderStageCreateInfo stages[2]{};
     stages[0].sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -112,23 +115,18 @@ bool ChunkRenderer::init(VkFormat color_format, VkFormat depth_format) {
     stages[1].module = fs;
     stages[1].pName  = "main";
 
-    // Vertex format mirrors MC's exactly (see shaders/chunk.vert byte layout).
+    // Vertex format mirrors MC's 32 B SOLID-layer format (same for all layers).
     VkVertexInputBindingDescription binding{};
     binding.binding   = 0;
-    binding.stride    = 32;  // 12 + 4 + 8 + 4 + 4
+    binding.stride    = 32;
     binding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
     VkVertexInputAttributeDescription attrs[5]{};
-    // location 0 — position (vec3 f32)
-    attrs[0] = {0, 0, VK_FORMAT_R32G32B32_SFLOAT,  0};
-    // location 1 — color (uvec4 u8 RGBA, NOT normalised — shader divides by 255)
-    attrs[1] = {1, 0, VK_FORMAT_R8G8B8A8_UINT,    12};
-    // location 2 — uv0 (vec2 f32)
-    attrs[2] = {2, 0, VK_FORMAT_R32G32_SFLOAT,    16};
-    // location 3 — uv2 (uvec2 u16)
-    attrs[3] = {3, 0, VK_FORMAT_R16G16_UINT,      24};
-    // location 4 — normal (uvec4 u8 — shader reinterprets > 127 as negative)
-    attrs[4] = {4, 0, VK_FORMAT_R8G8B8A8_UINT,    28};
+    attrs[0] = {0, 0, VK_FORMAT_R32G32B32_SFLOAT,  0};   // position
+    attrs[1] = {1, 0, VK_FORMAT_R8G8B8A8_UINT,    12};   // color
+    attrs[2] = {2, 0, VK_FORMAT_R32G32_SFLOAT,    16};   // uv0
+    attrs[3] = {3, 0, VK_FORMAT_R16G16_UINT,      24};   // uv2 (light)
+    attrs[4] = {4, 0, VK_FORMAT_R8G8B8A8_UINT,    28};   // normal + pad
 
     VkPipelineVertexInputStateCreateInfo vi{VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
     vi.vertexBindingDescriptionCount   = 1;
@@ -136,17 +134,6 @@ bool ChunkRenderer::init(VkFormat color_format, VkFormat depth_format) {
     vi.vertexAttributeDescriptionCount = 5;
     vi.pVertexAttributeDescriptions    = attrs;
 
-    // MC emits QUADS — 4 verts per quad. We honor the implicit quad→2-triangle
-    // expansion by interpreting the vertex stream with PRIMITIVE_TOPOLOGY_
-    // TRIANGLE_LIST and trusting MC's matching index buffer would have given
-    // the right triangles. BUT — we ignored MC's index buffer in 1.4.1. For
-    // now we use TRIANGLE_LIST and hope for the best; if the geometry looks
-    // wrong, we need to either honor the indices or rebuild as triangles.
-    //
-    // TODO Phase 1.4.2.5: respect MC's index buffer to get correct quad
-    // expansion (0,1,2 / 2,3,0). For now: most rectangles render OK as long
-    // as 6 of every 4 verts produce a quad — they don't, so expect tearing
-    // until we wire indices.
     VkPipelineInputAssemblyStateCreateInfo ia{VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
     ia.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
@@ -156,24 +143,33 @@ bool ChunkRenderer::init(VkFormat color_format, VkFormat depth_format) {
 
     VkPipelineRasterizationStateCreateInfo rs{VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
     rs.polygonMode = VK_POLYGON_MODE_FILL;
-    rs.cullMode    = VK_CULL_MODE_NONE;     // MC's winding doesn't always match VK conventions
+    rs.cullMode    = VK_CULL_MODE_NONE;
     rs.frontFace   = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     rs.lineWidth   = 1.0f;
 
     VkPipelineMultisampleStateCreateInfo ms{VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
     ms.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
+    // Depth: opaque writes + tests depth; translucent only tests (so it
+    // blends correctly with whatever opaque drew below).
     VkPipelineDepthStencilStateCreateInfo ds{VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
     ds.depthTestEnable  = VK_TRUE;
-    ds.depthWriteEnable = VK_TRUE;
-    ds.depthCompareOp   = VK_COMPARE_OP_LESS;     // VK reversed-Z would be GREATER; we keep classic
+    ds.depthWriteEnable = translucent ? VK_FALSE : VK_TRUE;
+    ds.depthCompareOp   = VK_COMPARE_OP_LESS;
     ds.minDepthBounds   = 0.0f;
     ds.maxDepthBounds   = 1.0f;
 
+    // Blending: opaque = none; translucent = standard alpha (src.a, 1-src.a).
     VkPipelineColorBlendAttachmentState cb_att{};
     cb_att.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
                             VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-    cb_att.blendEnable = VK_FALSE;
+    cb_att.blendEnable         = translucent ? VK_TRUE : VK_FALSE;
+    cb_att.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+    cb_att.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    cb_att.colorBlendOp        = VK_BLEND_OP_ADD;
+    cb_att.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    cb_att.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+    cb_att.alphaBlendOp        = VK_BLEND_OP_ADD;
 
     VkPipelineColorBlendStateCreateInfo cb{VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
     cb.attachmentCount = 1;
@@ -203,14 +199,14 @@ bool ChunkRenderer::init(VkFormat color_format, VkFormat depth_format) {
     pci.pDynamicState       = &dyn;
     pci.layout              = layout_;
 
-    VkResult r = vkCreateGraphicsPipelines(c.device, VK_NULL_HANDLE, 1, &pci, nullptr, &pipeline_);
+    VkResult r = vkCreateGraphicsPipelines(c.device, VK_NULL_HANDLE, 1, &pci, nullptr, &out);
     vkDestroyShaderModule(c.device, vs, nullptr);
     vkDestroyShaderModule(c.device, fs, nullptr);
     if (r != VK_SUCCESS) {
-        log("vkCreateGraphicsPipelines (chunk) failed (%d)", r);
+        log("vkCreateGraphicsPipelines (chunk %s) failed (%d)",
+            translucent ? "translucent" : "opaque", r);
         return false;
     }
-    log("chunk pipeline created (color=%d depth=%d)", (int)color_format, (int)depth_format);
     return true;
 }
 
@@ -237,19 +233,21 @@ void ChunkRenderer::bind_descriptor_set(VkCommandBuffer cmd) {
                             0, 1, &dset_, 0, nullptr);
 }
 
+void ChunkRenderer::bind_pipeline(VkCommandBuffer cmd, bool translucent) {
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                      translucent ? pipeline_translucent_ : pipeline_opaque_);
+}
+
 void ChunkRenderer::record(VkCommandBuffer cmd,
                            const float view[16],
                            const float proj[16],
                            int section_x, int section_y, int section_z,
                            VkBuffer vertex_buffer,
                            uint32_t vertex_count) {
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_);
-
-    // Push constants — must match the layout in chunk.vert's PC block.
     struct {
         float view[16];
         float proj[16];
-        int32_t sectionPos[4];   // xyz + pad
+        int32_t sectionPos[4];
     } pc;
     std::memcpy(pc.view, view, sizeof(pc.view));
     std::memcpy(pc.proj, proj, sizeof(pc.proj));
@@ -262,20 +260,18 @@ void ChunkRenderer::record(VkCommandBuffer cmd,
     VkDeviceSize offset = 0;
     vkCmdBindVertexBuffers(cmd, 0, 1, &vertex_buffer, &offset);
 
-    // Phase 1.4.2.5: quad → triangle expansion via the shared index buffer
-    // (bound once per frame in renderer.cpp). MC emits 4 verts per quad;
-    // we issue 6 indices per quad through vkCmdDrawIndexed.
-    const uint32_t quad_count = vertex_count / 4;
+    const uint32_t quad_count  = vertex_count / 4;
     const uint32_t index_count = quad_count * 6;
     vkCmdDrawIndexed(cmd, index_count, 1, 0, 0, 0);
 }
 
 void ChunkRenderer::destroy() {
     auto& c = ctx();
-    if (pipeline_) { vkDestroyPipeline(c.device, pipeline_, nullptr); pipeline_ = VK_NULL_HANDLE; }
-    if (layout_)   { vkDestroyPipelineLayout(c.device, layout_, nullptr); layout_ = VK_NULL_HANDLE; }
-    if (dpool_)    { vkDestroyDescriptorPool(c.device, dpool_, nullptr); dpool_ = VK_NULL_HANDLE; }
-    if (dsl_)      { vkDestroyDescriptorSetLayout(c.device, dsl_, nullptr); dsl_ = VK_NULL_HANDLE; }
+    if (pipeline_opaque_)      { vkDestroyPipeline(c.device, pipeline_opaque_, nullptr);      pipeline_opaque_ = VK_NULL_HANDLE; }
+    if (pipeline_translucent_) { vkDestroyPipeline(c.device, pipeline_translucent_, nullptr); pipeline_translucent_ = VK_NULL_HANDLE; }
+    if (layout_)               { vkDestroyPipelineLayout(c.device, layout_, nullptr);         layout_ = VK_NULL_HANDLE; }
+    if (dpool_)                { vkDestroyDescriptorPool(c.device, dpool_, nullptr);          dpool_ = VK_NULL_HANDLE; }
+    if (dsl_)                  { vkDestroyDescriptorSetLayout(c.device, dsl_, nullptr);       dsl_ = VK_NULL_HANDLE; }
     dset_ = VK_NULL_HANDLE;
     atlas_bound_ = false;
 }

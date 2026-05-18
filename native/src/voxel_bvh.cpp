@@ -128,13 +128,12 @@ void free_chunk(ChunkBlas& b) {
 
 } // namespace
 
-void BvhStore::upload_chunk(int cx, int cy, int cz,
-                            const void* verts, uint32_t vbytes,
-                            const void* idx,   uint32_t ibytes,
-                            const void* mats,  uint32_t mbytes) {
-    (void)idx; (void)mats; (void)ibytes; (void)mbytes;
+void BvhStore::upload_chunk(int cx, int cy, int cz, int layer,
+                            const void* verts, uint32_t vbytes) {
+    if (layer < 0 || layer >= LAYER_COUNT) return;
     ChunkKey k{cx, cy, cz};
     auto& c = ctx();
+    auto& map = chunks_[layer];
 
     std::lock_guard<std::mutex> guard(mutex_);
 
@@ -144,14 +143,14 @@ void BvhStore::upload_chunk(int cx, int cy, int cz,
     // point (extra +1 covers the small window where the worker observes a
     // stale counter just before the render thread increments).
     constexpr uint64_t SAFETY_MARGIN_FRAMES = 3; // FRAMES_IN_FLIGHT (2) + 1
-    auto it = chunks_.find(k);
-    if (it != chunks_.end()) {
+    auto it = map.find(k);
+    if (it != map.end()) {
         if (it->second.buffer || it->second.memory) {
             pending_.push_back({it->second.buffer, it->second.memory,
                                 current_frame_.load(std::memory_order_acquire)
                                 + SAFETY_MARGIN_FRAMES});
         }
-        chunks_.erase(it);
+        map.erase(it);
     }
 
     if (!verts || vbytes == 0) {
@@ -200,23 +199,25 @@ void BvhStore::upload_chunk(int cx, int cy, int cz,
     std::memcpy(mapped, verts, vbytes);
     vkUnmapMemory(c.device, b.memory);
 
-    chunks_[k] = b;
+    map[k] = b;
     tlas_dirty_ = true;
 
     if (log_budget_ > 0) {
         --log_budget_;
-        log("upload_chunk section=(%d,%d,%d): allocated %u-vert VkBuffer (%u B)",
-            cx, cy, cz, b.vertex_count, vbytes);
+        log("upload_chunk section=(%d,%d,%d) layer=%d: %u-vert VkBuffer (%u B)",
+            cx, cy, cz, layer, b.vertex_count, vbytes);
     }
 }
 
-std::vector<BvhStore::ChunkDraw> BvhStore::snapshot_for_draw() {
+BvhStore::LayerDraws BvhStore::snapshot_for_draw() {
     std::lock_guard<std::mutex> guard(mutex_);
-    std::vector<ChunkDraw> out;
-    out.reserve(chunks_.size());
-    for (auto& [k, b] : chunks_) {
-        if (b.buffer && b.vertex_count) {
-            out.push_back({k.x, k.y, k.z, b.buffer, b.vertex_count});
+    LayerDraws out;
+    for (int layer = 0; layer < LAYER_COUNT; ++layer) {
+        out[layer].reserve(chunks_[layer].size());
+        for (auto& [k, b] : chunks_[layer]) {
+            if (b.buffer && b.vertex_count) {
+                out[layer].push_back({k.x, k.y, k.z, b.buffer, b.vertex_count});
+            }
         }
     }
     return out;
@@ -224,15 +225,17 @@ std::vector<BvhStore::ChunkDraw> BvhStore::snapshot_for_draw() {
 
 void BvhStore::remove_chunk(int cx, int cy, int cz) {
     std::lock_guard<std::mutex> guard(mutex_);
-    auto it = chunks_.find({cx, cy, cz});
-    if (it == chunks_.end()) return;
     constexpr uint64_t SAFETY_MARGIN_FRAMES = 3;
-    if (it->second.buffer || it->second.memory) {
-        pending_.push_back({it->second.buffer, it->second.memory,
-                            current_frame_.load(std::memory_order_acquire)
-                            + SAFETY_MARGIN_FRAMES});
+    const uint64_t now = current_frame_.load(std::memory_order_acquire);
+    for (int layer = 0; layer < LAYER_COUNT; ++layer) {
+        auto it = chunks_[layer].find({cx, cy, cz});
+        if (it == chunks_[layer].end()) continue;
+        if (it->second.buffer || it->second.memory) {
+            pending_.push_back({it->second.buffer, it->second.memory,
+                                now + SAFETY_MARGIN_FRAMES});
+        }
+        chunks_[layer].erase(it);
     }
-    chunks_.erase(it);
     tlas_dirty_ = true;
 }
 
@@ -278,10 +281,12 @@ void BvhStore::destroy() {
     // orphaned leak list.
     if (c.device) vkDeviceWaitIdle(c.device);
 
-    for (auto& [_, b] : chunks_) {
-        free_chunk(b);
+    for (auto& layerMap : chunks_) {
+        for (auto& [_, b] : layerMap) {
+            free_chunk(b);
+        }
+        layerMap.clear();
     }
-    chunks_.clear();
     for (auto& p : pending_) {
         if (p.buffer) vkDestroyBuffer(c.device, p.buffer, nullptr);
         if (p.memory) vkFreeMemory(c.device, p.memory, nullptr);

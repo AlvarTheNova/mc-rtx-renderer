@@ -24,11 +24,11 @@ public final class NativeBridge {
 
     public static native void resize(int width, int height);
 
-    /** Upload a chunk's mesh. Vertex + index data laid out per DESIGN.md §3.1. */
+    /** Upload one render-layer of a chunk section. layer: 0=SOLID, 1=CUTOUT,
+     *  2=TRANSLUCENT, 3=TRIPWIRE. Vertex bytes are MC's 32-byte format. */
     public static native void uploadChunk(
-            int chunkX, int chunkY, int chunkZ,
-            ByteBuffer vertices, ByteBuffer indices,
-            ByteBuffer materialIds);
+            int chunkX, int chunkY, int chunkZ, int layer,
+            ByteBuffer vertices);
 
     public static native void removeChunk(int chunkX, int chunkY, int chunkZ);
 

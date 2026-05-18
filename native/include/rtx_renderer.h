@@ -22,11 +22,19 @@ void rtx_resize(int width, int height);
 void rtx_render_frame(const FrameParams& params);
 void rtx_shutdown();
 
-// Chunk geometry (called from JNI uploadChunk)
-void rtx_upload_chunk(int cx, int cy, int cz,
-                      const void* vertices, uint32_t vertex_bytes,
-                      const void* indices,  uint32_t index_bytes,
-                      const void* mat_ids,  uint32_t mat_bytes);
+// Render layer IDs — must match Java SectionBuilderMixin and
+// chunk_renderer.h LayerId.
+enum LayerId {
+    LAYER_SOLID       = 0,
+    LAYER_CUTOUT      = 1,
+    LAYER_TRANSLUCENT = 2,
+    LAYER_TRIPWIRE    = 3,
+    LAYER_COUNT       = 4,
+};
+
+// Chunk geometry (called from JNI uploadChunk). One call per (section, layer).
+void rtx_upload_chunk(int cx, int cy, int cz, int layer,
+                      const void* vertices, uint32_t vertex_bytes);
 void rtx_remove_chunk(int cx, int cy, int cz);
 
 // Phase 1.4.4: stitched block atlas (RGBA8 row-major).

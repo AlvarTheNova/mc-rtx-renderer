@@ -8,8 +8,7 @@ namespace {
 const JNINativeMethod kBridgeMethods[] = {
     {(char*)"init",         (char*)"(JII)I",                          (void*)rtxmc_native_init},
     {(char*)"resize",       (char*)"(II)V",                           (void*)rtxmc_native_resize},
-    {(char*)"uploadChunk",  (char*)"(IIILjava/nio/ByteBuffer;Ljava/nio/ByteBuffer;Ljava/nio/ByteBuffer;)V",
-                                                                      (void*)rtxmc_native_uploadChunk},
+    {(char*)"uploadChunk",  (char*)"(IIIILjava/nio/ByteBuffer;)V",   (void*)rtxmc_native_uploadChunk},
     {(char*)"removeChunk",  (char*)"(III)V",                          (void*)rtxmc_native_removeChunk},
     {(char*)"uploadBlockAtlas", (char*)"(IILjava/nio/ByteBuffer;)V",  (void*)rtxmc_native_uploadBlockAtlas},
     {(char*)"renderFrame",  (char*)"(Ljava/nio/ByteBuffer;)V",        (void*)rtxmc_native_renderFrame},
@@ -65,15 +64,11 @@ JNIEXPORT void JNICALL rtxmc_native_renderFrame(JNIEnv* env, jclass, jobject par
 
 JNIEXPORT void JNICALL rtxmc_native_uploadChunk(
         JNIEnv* env, jclass,
-        jint cx, jint cy, jint cz,
-        jobject verts, jobject idx, jobject mats) {
+        jint cx, jint cy, jint cz, jint layer,
+        jobject verts) {
     void* vp = env->GetDirectBufferAddress(verts);
-    void* ip = env->GetDirectBufferAddress(idx);
-    void* mp = env->GetDirectBufferAddress(mats);
     auto vlen = (uint32_t)env->GetDirectBufferCapacity(verts);
-    auto ilen = (uint32_t)env->GetDirectBufferCapacity(idx);
-    auto mlen = (uint32_t)env->GetDirectBufferCapacity(mats);
-    rtxmc::rtx_upload_chunk(cx, cy, cz, vp, vlen, ip, ilen, mp, mlen);
+    rtxmc::rtx_upload_chunk(cx, cy, cz, layer, vp, vlen);
 }
 
 JNIEXPORT void JNICALL rtxmc_native_removeChunk(JNIEnv*, jclass, jint cx, jint cy, jint cz) {

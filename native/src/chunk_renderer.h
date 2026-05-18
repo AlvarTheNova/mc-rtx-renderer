@@ -27,10 +27,13 @@ public:
     // pass before issuing chunk draws.
     void bind_descriptor_set(VkCommandBuffer cmd);
 
-    // Records draw commands for ONE section. Caller is responsible for
-    // vkCmdBeginRendering / vkCmdEndRendering and viewport state. The shared
-    // quad index buffer must be bound before the first call (the renderer
-    // does this once per render pass).
+    // Bind the right pipeline for a given pass. Caller picks ordering:
+    //   pass 0 (opaque)      → SOLID + CUTOUT + TRIPWIRE (depth write ON, no blend)
+    //   pass 1 (translucent) → TRANSLUCENT (depth read only, alpha blend)
+    void bind_pipeline(VkCommandBuffer cmd, bool translucent);
+
+    // Records draw commands for ONE section. Pipeline must already be bound
+    // via bind_pipeline(); index buffer + descriptor set bound per render pass.
     void record(VkCommandBuffer cmd,
                 const float view[16],
                 const float proj[16],
@@ -39,12 +42,16 @@ public:
                 uint32_t vertex_count);
 
 private:
-    VkPipelineLayout      layout_     = VK_NULL_HANDLE;
-    VkPipeline            pipeline_   = VK_NULL_HANDLE;
-    VkDescriptorSetLayout dsl_        = VK_NULL_HANDLE;
-    VkDescriptorPool      dpool_      = VK_NULL_HANDLE;
-    VkDescriptorSet       dset_       = VK_NULL_HANDLE;
-    bool                  atlas_bound_ = false;
+    bool build_pipeline(VkPipeline& out, VkFormat color_format, VkFormat depth_format,
+                        bool translucent);
+
+    VkPipelineLayout      layout_              = VK_NULL_HANDLE;
+    VkPipeline            pipeline_opaque_     = VK_NULL_HANDLE;
+    VkPipeline            pipeline_translucent_ = VK_NULL_HANDLE;
+    VkDescriptorSetLayout dsl_                 = VK_NULL_HANDLE;
+    VkDescriptorPool      dpool_               = VK_NULL_HANDLE;
+    VkDescriptorSet       dset_                = VK_NULL_HANDLE;
+    bool                  atlas_bound_         = false;
 };
 
 } // namespace rtxmc

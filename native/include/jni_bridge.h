@@ -11,8 +11,8 @@ extern "C" {
 JNIEXPORT jint  JNICALL rtxmc_native_init(JNIEnv*, jclass, jlong hwnd, jint w, jint h);
 JNIEXPORT void  JNICALL rtxmc_native_resize(JNIEnv*, jclass, jint w, jint h);
 JNIEXPORT void  JNICALL rtxmc_native_uploadChunk(JNIEnv*, jclass,
-                                                 jint cx, jint cy, jint cz,
-                                                 jobject verts, jobject idx, jobject mats);
+                                                 jint cx, jint cy, jint cz, jint layer,
+                                                 jobject verts);
 JNIEXPORT void  JNICALL rtxmc_native_removeChunk(JNIEnv*, jclass, jint cx, jint cy, jint cz);
 JNIEXPORT void  JNICALL rtxmc_native_uploadBlockAtlas(JNIEnv*, jclass,
                                                      jint w, jint h, jobject pixels);

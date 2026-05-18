@@ -1,11 +1,14 @@
 #pragma once
 
 #include <vulkan/vulkan.h>
+#include <array>
 #include <atomic>
 #include <cstdint>
 #include <mutex>
 #include <unordered_map>
 #include <vector>
+
+#include "rtx_renderer.h"   // for LayerId / LAYER_COUNT
 
 namespace rtxmc {
 
@@ -41,13 +44,10 @@ public:
     bool init();
     void destroy();
 
-    // Called from rtx_upload_chunk on the JNI thread.
-    // Builds (or rebuilds) one BLAS for this 16³ subchunk and queues a
-    // TLAS rebuild for next frame.
-    void upload_chunk(int cx, int cy, int cz,
-                      const void* verts, uint32_t vbytes,
-                      const void* idx,   uint32_t ibytes,
-                      const void* mats,  uint32_t mbytes);
+    // Called from rtx_upload_chunk on the JNI thread. One call per (section,
+    // layer). Layer values match the LayerId enum in rtx_renderer.h.
+    void upload_chunk(int cx, int cy, int cz, int layer,
+                      const void* verts, uint32_t vbytes);
 
     void remove_chunk(int cx, int cy, int cz);
 
@@ -72,20 +72,23 @@ public:
     uint64_t current_frame() const         { return current_frame_.load(std::memory_order_acquire); }
     void     flush_pending_deletes();
 
-    // Snapshot the current chunk map for the render thread. Returns a vector
-    // of (key, blas-handles-needed-for-draw) so the renderer can iterate
-    // without holding the mutex.
+    // Snapshot the current chunk map for the render thread. Returns one
+    // vector per render layer (LAYER_COUNT total) so the renderer can iterate
+    // without holding the mutex and draw each layer with the right pipeline /
+    // pass ordering.
     struct ChunkDraw {
         int32_t  cx, cy, cz;
         VkBuffer buffer;
         uint32_t vertex_count;
     };
-    std::vector<ChunkDraw> snapshot_for_draw();
+    using LayerDraws = std::array<std::vector<ChunkDraw>, LAYER_COUNT>;
+    LayerDraws snapshot_for_draw();
 
 private:
     // Worker-thread chunk uploads contend with render-thread reads.
     std::mutex                 mutex_;
-    std::unordered_map<ChunkKey, ChunkBlas, ChunkKeyHash> chunks_;
+    using ChunkMap = std::unordered_map<ChunkKey, ChunkBlas, ChunkKeyHash>;
+    std::array<ChunkMap, LAYER_COUNT> chunks_;  // [layer]
     VkAccelerationStructureKHR tlas_         = VK_NULL_HANDLE;
     VkBuffer                   tlas_buffer_  = VK_NULL_HANDLE;
     VkDeviceMemory             tlas_memory_  = VK_NULL_HANDLE;

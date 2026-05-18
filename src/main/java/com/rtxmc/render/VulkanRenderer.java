@@ -12,7 +12,8 @@ import java.nio.ByteOrder;
  * everything lives behind {@link NativeBridge}. This class's job is to:
  *   1. Marshal per-frame parameters into a single off-heap buffer
  *   2. Make exactly one JNI call per frame ({@link NativeBridge#renderFrame})
- *   3. Hand world-data deltas to {@link VoxelBvhUploader}
+ *   3. (Chunk data flows from SectionBuilderMixin → NativeBridge directly,
+ *      bypassing this class.)
  */
 public final class VulkanRenderer {
 
@@ -21,7 +22,6 @@ public final class VulkanRenderer {
             .allocateDirect(256)
             .order(ByteOrder.nativeOrder());
 
-    private final VoxelBvhUploader bvhUploader = new VoxelBvhUploader();
     private boolean initialized = false;
     private int framebufferWidth;
     private int framebufferHeight;
@@ -49,8 +49,6 @@ public final class VulkanRenderer {
 
     public void renderFrame(Camera camera, Matrix4f positionMatrix, Matrix4f proj, float tickDelta) {
         if (!initialized) return;
-
-        bvhUploader.flushDirtyChunks();
 
         frameParams.clear();
         // Camera pose. Note: Camera.getPos() was removed in 1.21.11 Yarn;

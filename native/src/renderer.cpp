@@ -303,21 +303,39 @@ void rtx_render_frame(const FrameParams& params) {
         g_chunks.bind_atlas(atlas().view(), atlas().sampler());
     }
 
-    // Chunks first (depth-tested terrain). Snapshot under mutex; iterate outside.
-    // Bind the shared quad → triangle index buffer + descriptor set once per
-    // render pass; each chunk draw reuses them through vkCmdDrawIndexed.
-    auto draws = bvh().snapshot_for_draw();
-    if (!draws.empty() && g_chunks.atlas_bound()) {
-        vkCmdBindIndexBuffer(f.cmd, bvh().shared_quad_index_buffer(), 0,
-                             VK_INDEX_TYPE_UINT32);
-        g_chunks.bind_descriptor_set(f.cmd);
-        for (const auto& d : draws) {
-            // Sanity: skip any section bigger than our shared index buffer can index.
-            const uint32_t needed_indices = (d.vertex_count / 4) * 6;
-            if (needed_indices > bvh().shared_quad_index_capacity_indices()) continue;
-            g_chunks.record(f.cmd, params.view, params.proj,
-                            d.cx, d.cy, d.cz, d.buffer, d.vertex_count);
-        }
+    // Chunks: per-layer dispatch. Bind the shared quad-index buffer and
+    // descriptor set once per render pass; switch pipeline between opaque
+    // and translucent passes. Snapshot under mutex; iterate outside.
+    auto layer_draws = bvh().snapshot_for_draw();
+    if (g_chunks.atlas_bound()) {
+        bool index_buffer_bound = false;
+        const uint32_t max_indices = bvh().shared_quad_index_capacity_indices();
+
+        auto draw_layer = [&](int layer, bool translucent) {
+            const auto& draws = layer_draws[layer];
+            if (draws.empty()) return;
+            if (!index_buffer_bound) {
+                vkCmdBindIndexBuffer(f.cmd, bvh().shared_quad_index_buffer(), 0,
+                                     VK_INDEX_TYPE_UINT32);
+                g_chunks.bind_descriptor_set(f.cmd);
+                index_buffer_bound = true;
+            }
+            g_chunks.bind_pipeline(f.cmd, translucent);
+            for (const auto& d : draws) {
+                const uint32_t needed = (d.vertex_count / 4) * 6;
+                if (needed > max_indices) continue;
+                g_chunks.record(f.cmd, params.view, params.proj,
+                                d.cx, d.cy, d.cz, d.buffer, d.vertex_count);
+            }
+        };
+
+        // Opaque pass — SOLID, CUTOUT, TRIPWIRE (alpha-discard in shader
+        // handles the cutout case; tripwire is just thin geometry).
+        draw_layer(LAYER_SOLID,    /*translucent*/ false);
+        draw_layer(LAYER_CUTOUT,   /*translucent*/ false);
+        draw_layer(LAYER_TRIPWIRE, /*translucent*/ false);
+        // Translucent pass — TRANSLUCENT (water, stained glass).
+        draw_layer(LAYER_TRANSLUCENT, /*translucent*/ true);
     }
 
     // Sanity triangle on top (always-visible NDC sentinel + world triangle).
@@ -388,11 +406,9 @@ void rtx_shutdown() {
 
 // ---- Chunk + DLSS forwarders -----------------------------------------------
 
-void rtx_upload_chunk(int cx, int cy, int cz,
-                      const void* v, uint32_t vb,
-                      const void* i, uint32_t ib,
-                      const void* m, uint32_t mb) {
-    bvh().upload_chunk(cx, cy, cz, v, vb, i, ib, m, mb);
+void rtx_upload_chunk(int cx, int cy, int cz, int layer,
+                      const void* v, uint32_t vb) {
+    bvh().upload_chunk(cx, cy, cz, layer, v, vb);
 }
 void rtx_remove_chunk(int cx, int cy, int cz) { bvh().remove_chunk(cx, cy, cz); }
 
