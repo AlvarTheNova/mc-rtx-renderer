@@ -60,23 +60,21 @@ public abstract class SpriteAtlasMixin {
         int nullImage = 0;
         int emptyPixels = 0;
         long totalPixels = 0;
-        int minX = Integer.MAX_VALUE, maxX = 0, minY = Integer.MAX_VALUE, maxY = 0;
-        int spritesAbove1000x = 0, spritesAbove1000y = 0;
         for (Sprite s : sprites.values()) {
             NativeImage img = s.getContents().image;
             if (img == null) { ++nullImage; continue; }
 
-            final int sx = s.getX();
-            final int sy = s.getY();
-            final int sw = img.getWidth();
-            final int sh = img.getHeight();
+            // Place sprite where MC's vertex UVs actually point. Earlier
+            // debug found Sprite.getX()/getY() returns position BEFORE a
+            // 16 px mipmap-border; MC's vertex UVs use the post-border
+            // position. Use minU/minV (the canonical MC UVs) to derive
+            // pixel position so sampling lines up.
+            final int sx = Math.round(s.getMinU() * w);
+            final int sy = Math.round(s.getMinV() * h);
+            final int sw = Math.round((s.getMaxU() - s.getMinU()) * w);
+            final int sh = Math.round((s.getMaxV() - s.getMinV()) * h);
+            final int srcStride = img.getWidth();
 
-            minX = Math.min(minX, sx);
-            maxX = Math.max(maxX, sx + sw);
-            minY = Math.min(minY, sy);
-            maxY = Math.max(maxY, sy + sh);
-            if (sx > 1000) ++spritesAbove1000x;
-            if (sy > 1000) ++spritesAbove1000y;
             int[] px;
             try {
                 px = img.copyPixelsArgb();
@@ -86,17 +84,21 @@ public abstract class SpriteAtlasMixin {
             }
             if (px == null || px.length == 0) { ++emptyPixels; continue; }
 
-            // Animated textures stack frames vertically. Only copy the first
-            // animation frame (height = sw is the typical square assumption).
-            final int copyH = Math.min(sh, h - sy);
+            // Bound by source image and atlas remaining space. Animated
+            // textures stack frames vertically (img.height > sh) — we want
+            // only the first frame.
+            final int copyH = Math.min(Math.min(sh, h - sy), img.getHeight());
+            final int copyW = Math.min(Math.min(sw, w - sx), srcStride);
+            if (copyH <= 0 || copyW <= 0) { ++emptyPixels; continue; }
+
             for (int y = 0; y < copyH; ++y) {
                 int dstRowStart = ((sy + y) * w + sx) * 4;
-                int srcRowStart = y * sw;
-                for (int x = 0; x < sw; ++x) {
+                int srcRowStart = y * srcStride;
+                for (int x = 0; x < copyW; ++x) {
                     atlas.putInt(dstRowStart + x * 4, argbToRgba(px[srcRowStart + x]));
                 }
             }
-            totalPixels += (long) sw * copyH;
+            totalPixels += (long) copyW * copyH;
             ++spritesCopied;
         }
 
