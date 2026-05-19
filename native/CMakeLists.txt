@@ -70,8 +70,14 @@ add_spirv_shader("${SHADER_DIR}/triangle.vert" TRIANGLE_VERT_H)
 add_spirv_shader("${SHADER_DIR}/triangle.frag" TRIANGLE_FRAG_H)
 add_spirv_shader("${SHADER_DIR}/chunk.vert"    CHUNK_VERT_H)
 add_spirv_shader("${SHADER_DIR}/chunk.frag"    CHUNK_FRAG_H)
-add_spirv_shader("${SHADER_DIR}/entity.vert"   ENTITY_VERT_H)
-add_spirv_shader("${SHADER_DIR}/entity.frag"   ENTITY_FRAG_H)
+add_spirv_shader("${SHADER_DIR}/entity.vert"    ENTITY_VERT_H)
+add_spirv_shader("${SHADER_DIR}/entity.frag"    ENTITY_FRAG_H)
+add_spirv_shader("${SHADER_DIR}/glint.vert"     GLINT_VERT_H)
+add_spirv_shader("${SHADER_DIR}/glint.frag"     GLINT_FRAG_H)
+add_spirv_shader("${SHADER_DIR}/lines.vert"     LINES_VERT_H)
+add_spirv_shader("${SHADER_DIR}/lines.frag"     LINES_FRAG_H)
+add_spirv_shader("${SHADER_DIR}/debug_box.vert" DEBUG_BOX_VERT_H)
+add_spirv_shader("${SHADER_DIR}/debug_box.frag" DEBUG_BOX_FRAG_H)
 
 # ---- Library ---------------------------------------------------------------
 add_library(rtx_renderer SHARED
@@ -92,6 +98,12 @@ add_library(rtx_renderer SHARED
     ${CHUNK_FRAG_H}
     ${ENTITY_VERT_H}
     ${ENTITY_FRAG_H}
+    ${GLINT_VERT_H}
+    ${GLINT_FRAG_H}
+    ${LINES_VERT_H}
+    ${LINES_FRAG_H}
+    ${DEBUG_BOX_VERT_H}
+    ${DEBUG_BOX_FRAG_H}
 )
 
 target_include_directories(rtx_renderer PRIVATE
