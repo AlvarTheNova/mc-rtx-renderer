@@ -168,10 +168,21 @@ Realistic subdivision — original "Phase 1" was 2-3 months of work, not weeks.
 
 > **Pivot rationale:** earlier estimate was "3 days" assuming HUD reuses our entity-batch hook. Investigation revealed HUD + Screens flow through the new `com.mojang.blaze3d.systems.GpuDevice` abstraction (`DrawContext → RenderPipeline → CommandEncoder → RenderPass`), not `VertexConsumerProvider.Immediate`. The architecturally pure path is to implement our own `GpuDevice` impl (`VkBackend`) that replaces `GlBackend`. Side benefit: this same path captures Screens, post-process, and main menu — far more than just HUD. Chunk + entity work from 1.4/1.5 is additive (those subsystems are NOT on GpuDevice yet).
 
-#### 1.6.1a — VkBackend scaffold (intercept + log, no behavior)
-- [ ] `com.rtxmc.gpu.VkBackend` implements `GpuDevice`; all methods log + throw `UnsupportedOperationException` for now
-- [ ] Mixin into `RenderSystem.initRenderer` (or wherever `new GlBackend(...)` is constructed) to substitute our backend
-- [ ] Run MC; observe which methods get called first → builds a prioritised method-implementation order
+#### 1.6.1a — VkBackend wrapper scaffold (intercept + log, delegate to GL)  ✓ done
+- [x] `com.rtxmc.gpu.VkBackend implements GpuDevice` — 22 methods. Wraps Mojang's GlBackend instead of replacing it (so MC keeps running). Each method logs first 3 calls with a per-method counter.
+- [x] `RenderSystemDeviceAccessor` widens private static `DEVICE` field
+- [x] `RenderSystemInitMixin` @Inject TAIL of `initRenderer` reads DEVICE, wraps in VkBackend, writes back. Idempotent.
+- [x] **Validated in-MC (7-min session):** F3 reads `rtxmc-vk(opengl)`. Tier 1 methods (createBuffer/Texture/TextureView/CommandEncoder/precompilePipeline) all saturated 3-call log budget = called many times. createSampler fires once per world load. Pure-query methods forwarded fine. No crashes.
+
+#### 1.6.1b — Minimum-viable Vulkan resource impls (Tier 1 all-at-once)
+- [ ] `VkGpuBuffer extends GpuBuffer` backed by VkBuffer (HOST_VISIBLE for now) + JNI `createBuffer`/`destroyBuffer`/`mapBuffer`
+- [ ] `VkGpuTexture extends GpuTexture` backed by VkImage + JNI `createTexture`/`writeToTexture`
+- [ ] `VkGpuTextureView extends GpuTextureView` (cheap — just a VkImageView wrapper)
+- [ ] `VkGpuSampler extends GpuSampler` (cheap — VkSampler wrapper)
+- [ ] `VkCommandEncoder implements CommandEncoder` — records into our existing per-frame VkCommandBuffer
+- [ ] `VkRenderPass implements RenderPass` — vkCmdBeginRendering / vkCmdSetPipeline / vkCmdDraw state machine
+- [ ] `precompilePipeline` — runtime GLSL→SPIR-V (bundle shaderc OR pre-compile + cache). Stub initially: keep forwarding to GL impl while we build the rest.
+- [ ] Why all-at-once: incremental replacement requires consumers to handle mixed GL/VK resource types — tightly-coupled cluster.
 
 #### 1.6.1b — Buffer/texture/sampler primitives
 - [ ] Implement `createBuffer` family → VkBuffer-backed `GpuBuffer` subclass with `slice()` support
