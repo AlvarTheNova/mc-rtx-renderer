@@ -6,6 +6,8 @@
     "WindowMixin",
     "GlBackendMixin",
     "RenderSystemMixin",
+    "RenderSystemDeviceAccessor",
+    "RenderSystemInitMixin",
     "MinecraftClientMixin",
     "LevelRendererMixin",
     "GameRendererMixin",
