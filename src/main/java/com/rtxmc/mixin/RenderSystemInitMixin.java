@@ -4,6 +4,7 @@ import com.mojang.blaze3d.systems.GpuDevice;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.rtxmc.RtxMod;
 import com.rtxmc.gpu.VkBackend;
+import net.minecraft.client.gl.ShaderSourceGetter;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -28,7 +29,7 @@ public abstract class RenderSystemInitMixin {
 
     @Inject(method = "initRenderer", at = @At("TAIL"))
     private static void rtxmc$wrapDevice(long windowHandle, int debugVerbosity,
-                                          boolean syncCpuDebug, Object shaderSourceGetter,
+                                          boolean syncCpuDebug, ShaderSourceGetter shaderSourceGetter,
                                           boolean renderDoc, CallbackInfo ci) {
         GpuDevice current = RenderSystemDeviceAccessor.rtxmc$getDevice();
         if (current == null) {
