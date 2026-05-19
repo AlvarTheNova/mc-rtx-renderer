@@ -142,10 +142,15 @@ Realistic subdivision — original "Phase 1" was 2-3 months of work, not weeks.
 - [x] `uploadEntityBatch(layerHash, vertexCount, ByteBuffer)` — count needed for native stride filter (only 36 B accepted; LINES/GLINT/debug dropped)
 - [x] **Exit validated in MC:** mobs render at correct world positions (textures wrong as expected — atlas-reuse first light)
 
-##### 1.5.2c — Vertex format variants
-- [ ] Glint pipeline (Position + UV0 = 20 B, additive blend)
-- [ ] Lines pipeline (Position + Color + Normal + LineWidth, primitive topology = LINES)
-- [ ] Debug filled box / point pipelines
+##### 1.5.2c — Vertex format variants  ⚠ partial — full validation blocked on 1.6 HUD
+- [x] Glint pipeline (Position + UV0 = 20 B, additive blend, depth-test only)
+- [x] Lines pipeline (Position + Color + Normal + LineWidth = 24 B, `LINE_LIST` topology, fixed width=1.0; per-vertex width attribute bound for layout but unused)
+- [x] Debug filled box pipeline (Position + Color = 16 B, alpha-blended triangles)
+- [x] EntityRenderer refactored to dispatch by stride; all four variants share one pipeline layout (push constants + atlas DSL); lines/debug shaders simply don't declare the sampler
+- [x] Draw order: entity → debug_box → lines → glint (additive overlay last)
+- [x] **Partial exit:** native pipelines + stride dispatch verified non-crashing in-MC; entity (36 B) variant regression-checked — mobs still render at correct positions
+- [ ] **Blocked:** glint needs enchanted item in inventory (no HUD = no inventory access); lines need block-aim hover (no crosshair); debug_box needs F3+G/B which works without HUD but requires the tester to actually press it. Revisit after 1.6 HUD lands so a normal play session naturally exercises all three.
+- [ ] _Deferred:_ 12 B position-only (water_mask, end_portal, end_gateway) — needs bespoke shaders
 
 ##### 1.5.2d — Per-layer textures (the real work)
 - [ ] Resolve each `RenderLayer`'s `Sampler0` texture binding
@@ -159,10 +164,51 @@ Realistic subdivision — original "Phase 1" was 2-3 months of work, not weeks.
 - [ ] Block entities (chests, signs — partial overlap with entity renderer)
 - [ ] **Exit Phase 1.5:** parity with vanilla entity rendering
 
-### 1.6 — HUD compositor + vanilla post (~3 days)
-- [ ] VK reimplementation of `GuiGraphics` (sprite batcher, text via MC's font atlas)
+### 1.6 — `GpuDevice` replacement: HUD + Screens via Vulkan (multi-session, est. 5-7 sessions)
+
+> **Pivot rationale:** earlier estimate was "3 days" assuming HUD reuses our entity-batch hook. Investigation revealed HUD + Screens flow through the new `com.mojang.blaze3d.systems.GpuDevice` abstraction (`DrawContext → RenderPipeline → CommandEncoder → RenderPass`), not `VertexConsumerProvider.Immediate`. The architecturally pure path is to implement our own `GpuDevice` impl (`VkBackend`) that replaces `GlBackend`. Side benefit: this same path captures Screens, post-process, and main menu — far more than just HUD. Chunk + entity work from 1.4/1.5 is additive (those subsystems are NOT on GpuDevice yet).
+
+#### 1.6.1a — VkBackend scaffold (intercept + log, no behavior)
+- [ ] `com.rtxmc.gpu.VkBackend` implements `GpuDevice`; all methods log + throw `UnsupportedOperationException` for now
+- [ ] Mixin into `RenderSystem.initRenderer` (or wherever `new GlBackend(...)` is constructed) to substitute our backend
+- [ ] Run MC; observe which methods get called first → builds a prioritised method-implementation order
+
+#### 1.6.1b — Buffer/texture/sampler primitives
+- [ ] Implement `createBuffer` family → VkBuffer-backed `GpuBuffer` subclass with `slice()` support
+- [ ] Implement `createTexture` family → VkImage-backed `GpuTexture` subclass
+- [ ] Implement `createTextureView` → VkImageView wrapper
+- [ ] Implement `createSampler` → VkSampler wrapper
+- [ ] Implement `GpuFence` via VkFence
+
+#### 1.6.1c — Pipeline compilation
+- [ ] `precompilePipeline(RenderPipeline)` → translate vertex format + blend/depth/cull state to VkGraphicsPipeline
+- [ ] GLSL → SPIR-V translation. Options: bundle `shaderc` for runtime, OR pre-compile and cache by hash
+- [ ] Cache compiled pipelines keyed by `RenderPipeline.getLocation()`
+
+#### 1.6.1d — CommandEncoder + RenderPass
+- [ ] `CommandEncoder` impl: tracks current command buffer; methods open/close render passes, transfer buffers
+- [ ] `RenderPass` impl: per-active-pass state machine; setPipeline + bindTexture + setVertexBuffer + drawIndexed
+- [ ] Integrate with existing per-frame command buffer / sync primitives
+- [ ] Handle `enableScissor` (vkCmdSetScissor)
+
+#### 1.6.1e — Swapchain integration + HUD first-light
+- [ ] Hook `CommandEncoder.createRenderPass(...)` targeting the swapchain → record into our active frame's cmd buffer
+- [ ] Render order: world (chunks → entities → triangle) → HUD draws via VkBackend → present
+- [ ] **Exit:** crosshair + hotbar + hearts visible in MC. Inventory screen opens via E.
+
+#### 1.6.1f — Screens + post-process
+- [ ] Validate inventory / chat / pause menu render correctly through the same path
+- [ ] Confirm main menu / pause screens work (may still be on legacy GL — defer if so)
+
+#### 1.6.2 — Backflow validation (1.5.2c completion)
+- [ ] Now that crosshair exists: confirm selection box outlines render (lines variant)
+- [ ] Equip enchanted item via newly-working inventory → glint shimmer visible
+- [ ] F3+G chunk borders, F3+B hitboxes → debug_box variant exercised
+- [ ] Mark 1.5.2c fully validated
+
+### 1.6.x — Other vanilla overlays (post-HUD)
 - [ ] Entity outline + fog passes
-- [ ] **Exit:** vanilla parity for one full play session — main menu through gameplay through pause
+- [ ] Particles, weather overlays
 
 ## Phase 2 — DLSS SR (~1 week)
 - [ ] Streamline init, plugin discovery
