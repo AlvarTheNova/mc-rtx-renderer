@@ -75,6 +75,15 @@ public final class VulkanRenderer {
 
         putMat4(frameParams, view);
         putMat4(frameParams, proj);
+
+        // Phase 1.5.2b: entities. MC's entity rendering walks the MatrixStack
+        // having ALREADY pre-translated by -camPos at world-render setup time,
+        // so vertex bytes arrive in camera-relative-world space. The full view
+        // matrix above includes translate(-camPos), which would double-shift
+        // entities. Pass the rotation-only positionMatrix separately so the
+        // entity vertex shader can use proj * positionMatrix * v directly.
+        putMat4(frameParams, positionMatrix);
+
         frameParams.putFloat(tickDelta);
         frameParams.flip();
 

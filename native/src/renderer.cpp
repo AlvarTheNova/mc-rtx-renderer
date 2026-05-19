@@ -5,6 +5,7 @@
 #include "streamline_integration.h"
 #include "triangle.h"
 #include "chunk_renderer.h"
+#include "entity_renderer.h"
 #include "atlas.h"
 #include "frustum.h"
 
@@ -202,6 +203,9 @@ int rtx_init(void* hwnd, int w, int h) {
     if (!g_chunks.init(c.swap_format, DEPTH_FORMAT))            return 6;
     if (!create_depth_resources(c.swap_extent))                 return 7;
     if (!atlas().init())                                        return 8;
+    // Entity pipeline shares the chunk descriptor set layout (1 combined image
+    // sampler at set 0 binding 0). Atlas dset is bound per-frame in record_*.
+    if (!entities().init(c.swap_format, DEPTH_FORMAT, g_chunks.dsl())) return 9;
 
     g_tracer.resize(c.swap_extent, c.swap_extent);
     log("rtx_init complete (device=%s)", c.phys_name);
@@ -369,6 +373,18 @@ void rtx_render_frame(const FrameParams& params) {
         }
     }
 
+    // Phase 1.5.2b — entities. After all opaque/translucent chunks; before
+    // the sanity triangle so the triangle overlay stays on top. We reuse the
+    // chunk renderer's atlas descriptor set (entity textures are wrong in
+    // 1.5.2b — 1.5.2d wires per-mob skins).
+    //
+    // Always call record_and_consume even when atlas isn't bound yet — it
+    // internally drops accumulated batches in that case. Otherwise the
+    // early frames before atlas-ready would silently leak entity buffers.
+    entities().set_atlas_dset(g_chunks.atlas_bound() ? g_chunks.atlas_dset()
+                                                     : VK_NULL_HANDLE);
+    entities().record_and_consume(f.cmd, params.view_rot, params.proj);
+
     // Sanity triangle on top (always-visible NDC sentinel + world triangle).
     g_triangle.record(f.cmd, params.view, params.proj, c.swap_extent);
 
@@ -425,6 +441,7 @@ void rtx_shutdown() {
     auto& c = ctx();
     if (c.device) vkDeviceWaitIdle(c.device);
     atlas().destroy();
+    entities().destroy();
     g_chunks.destroy();
     g_triangle.destroy();
     g_tracer.destroy();
@@ -451,15 +468,9 @@ void rtx_upload_block_atlas(int w, int h, const void* pixels, uint32_t bytes) {
     atlas().upload(w, h, pixels, bytes);
 }
 
-void rtx_upload_entity_batch(int layer_hash, const void* verts, uint32_t vbytes) {
-    // Phase 1.5.2a: log-only. Native storage + render comes in 1.5.2b.
-    (void)verts;
-    static std::atomic<int> log_budget{8};
-    int remaining = log_budget.fetch_sub(1, std::memory_order_relaxed);
-    if (remaining > 0) {
-        log("entity batch: layer_hash=0x%08x bytes=%u",
-            (uint32_t)layer_hash, vbytes);
-    }
+void rtx_upload_entity_batch(int layer_hash, uint32_t vertex_count,
+                             const void* verts, uint32_t vbytes) {
+    entities().upload_batch(layer_hash, verts, vertex_count, vbytes);
 }
 
 } // namespace rtxmc

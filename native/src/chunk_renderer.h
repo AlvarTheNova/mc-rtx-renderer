@@ -23,6 +23,11 @@ public:
     void bind_atlas(VkImageView view, VkSampler sampler);
     bool atlas_bound() const { return atlas_bound_; }
 
+    // Accessors so other renderers (EntityRenderer) can share the atlas
+    // descriptor set + layout instead of duplicating them.
+    VkDescriptorSetLayout dsl()         const { return dsl_; }
+    VkDescriptorSet       atlas_dset()  const { return dset_; }
+
     // Bind the descriptor set onto the command buffer. Call once per render
     // pass before issuing chunk draws.
     void bind_descriptor_set(VkCommandBuffer cmd);

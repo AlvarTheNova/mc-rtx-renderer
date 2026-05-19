@@ -17,7 +17,8 @@ JNIEXPORT void  JNICALL rtxmc_native_removeChunk(JNIEnv*, jclass, jint cx, jint 
 JNIEXPORT void  JNICALL rtxmc_native_uploadBlockAtlas(JNIEnv*, jclass,
                                                      jint w, jint h, jobject pixels);
 JNIEXPORT void  JNICALL rtxmc_native_uploadEntityBatch(JNIEnv*, jclass,
-                                                      jint layer_hash, jobject verts);
+                                                      jint layer_hash, jint vertex_count,
+                                                      jobject verts);
 JNIEXPORT void  JNICALL rtxmc_native_renderFrame(JNIEnv*, jclass, jobject params);
 JNIEXPORT void  JNICALL rtxmc_native_shutdown(JNIEnv*, jclass);
 

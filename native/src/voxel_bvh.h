@@ -72,6 +72,12 @@ public:
     uint64_t current_frame() const         { return current_frame_.load(std::memory_order_acquire); }
     void     flush_pending_deletes();
 
+    // Phase 1.5.2b: tiny piggy-back API for transient entity-batch buffers.
+    // EntityRenderer hands off used-this-frame VkBuffers; they're held in
+    // the same pending_ list with the same SAFETY_MARGIN_FRAMES window so
+    // we don't free while the GPU is still consuming them. Thread-safe.
+    void queue_buffer_delete(VkBuffer buffer, VkDeviceMemory memory);
+
     // Snapshot the current chunk map for the render thread. Returns one
     // vector per render layer (LAYER_COUNT total) so the renderer can iterate
     // without holding the mutex and draw each layer with the right pipeline /

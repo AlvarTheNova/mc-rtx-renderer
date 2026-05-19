@@ -58,10 +58,11 @@ public abstract class BufferBuilderEndMixin {
         copy.put(src.duplicate());
         copy.flip();
 
-        // Phase 1.5.2a: stash with a stable layer hash. Native side just logs
-        // for now; 1.5.2b adds real per-frame buffers + rendering.
+        // Phase 1.5.2b: stash with a stable layer hash AND vertex count so the
+        // native side can filter by stride (skip non-36-B formats like LINES
+        // and GLINT until 1.5.2c lights them up).
         int layerHash = layer.toString().hashCode();
-        NativeBridge.uploadEntityBatch(layerHash, copy);
+        NativeBridge.uploadEntityBatch(layerHash, dp.vertexCount(), copy);
 
         if (rtxmc$logBudget.getAndDecrement() > 0) {
             RtxMod.LOG.info("rtxmc entity batch: layer={} verts={} bytes={} fmt={}",

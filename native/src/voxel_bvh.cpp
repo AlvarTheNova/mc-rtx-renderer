@@ -239,6 +239,15 @@ void BvhStore::remove_chunk(int cx, int cy, int cz) {
     tlas_dirty_ = true;
 }
 
+void BvhStore::queue_buffer_delete(VkBuffer buffer, VkDeviceMemory memory) {
+    if (!buffer && !memory) return;
+    constexpr uint64_t SAFETY_MARGIN_FRAMES = 3;
+    std::lock_guard<std::mutex> guard(mutex_);
+    pending_.push_back({buffer, memory,
+                        current_frame_.load(std::memory_order_acquire)
+                        + SAFETY_MARGIN_FRAMES});
+}
+
 void BvhStore::flush_pending_deletes() {
     std::lock_guard<std::mutex> guard(mutex_);
     if (pending_.empty()) return;

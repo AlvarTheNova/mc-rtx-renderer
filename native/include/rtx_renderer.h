@@ -6,12 +6,21 @@ namespace rtxmc {
 
 // Single struct that mirrors the byte layout written by
 // VulkanRenderer.frameParams in Java. Order and padding MUST match.
+//
+// view     = full world→eye matrix = positionMatrix * translate(-camPos)
+//            used for chunk geometry which is in world-space coords.
+// view_rot = positionMatrix unmodified (rotation only).
+//            MC's entity rendering pre-translates by -camPos via MatrixStack
+//            BEFORE writing the vertex bytes, so entity verts arrive in
+//            camera-relative-world coords; applying view (which translates
+//            again) would double-shift. Use view_rot for entities.
 #pragma pack(push, 1)
 struct FrameParams {
     double  cam_x, cam_y, cam_z;
     float   yaw, pitch;
     float   view[16];
     float   proj[16];
+    float   view_rot[16];
     float   tick_delta;
 };
 #pragma pack(pop)
@@ -38,8 +47,9 @@ void rtx_upload_chunk(int cx, int cy, int cz, int layer,
 void rtx_remove_chunk(int cx, int cy, int cz);
 
 // Phase 1.5.2: per-frame transient entity batch. layer_hash identifies the
-// render layer (Java side: layer.toString().hashCode()).
-void rtx_upload_entity_batch(int layer_hash,
+// render layer (Java side: layer.toString().hashCode()). vertex_count is
+// needed because native filters by stride (only 36 B accepted in 1.5.2b).
+void rtx_upload_entity_batch(int layer_hash, uint32_t vertex_count,
                              const void* vertices, uint32_t vertex_bytes);
 
 // Phase 1.4.4: stitched block atlas (RGBA8 row-major).
