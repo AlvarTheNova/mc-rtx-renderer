@@ -45,7 +45,7 @@ public:
                             const float view_rot[16],
                             const float proj[16]);
 
-private:
+    // Public so the .cpp's anonymous-namespace helpers can reference it.
     enum Variant : uint32_t {
         VAR_ENTITY    = 0,  // 36 B
         VAR_GLINT     = 1,  // 20 B
@@ -54,6 +54,7 @@ private:
         VAR_COUNT     = 4,
     };
 
+private:
     struct Batch {
         VkBuffer       buffer       = VK_NULL_HANDLE;
         VkDeviceMemory memory       = VK_NULL_HANDLE;
