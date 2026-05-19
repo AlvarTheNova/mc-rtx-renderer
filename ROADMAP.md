@@ -133,12 +133,14 @@ Realistic subdivision — original "Phase 1" was 2-3 months of work, not weeks.
 - [x] `NativeBridge.uploadEntityBatch(layerHash, bytes)` + native log
 - [x] **Validated:** entity_translucent layer flowing with format `[Position, Color, UV0, UV1, UV2, Normal]` (36 B/vert)
 
-##### 1.5.2b — First mob visible (next session)
-- [ ] Native side: per-frame transient `VkBuffer` per layer (cleared each frame)
-- [ ] Entity vertex format: 36 B = chunk format + UV1 (overlay coords)
-- [ ] New `entity_renderer.cpp` with 36 B pipeline variant, reuse atlas descriptor for now
-- [ ] Render order: chunks → entities → triangle overlay
-- [ ] **Exit:** at least one mob/item visible (texture won't be right since entities use their own textures — that's 1.5.2d)
+##### 1.5.2b — First mob visible  ✓ done
+- [x] Native side: per-frame transient `VkBuffer` per batch (HOST_VISIBLE, freed via `BvhStore::queue_buffer_delete` + 3-frame safety margin)
+- [x] Entity vertex format: 36 B = chunk format + UV1 (overlay coords) at attrs 0–5
+- [x] New `entity_renderer.{h,cpp}` with 36 B pipeline (alpha-blend ON, depth test+write ON), shares ChunkRenderer's atlas DSL + descriptor set
+- [x] Render order: chunks (opaque) → chunks (translucent) → entities → triangle overlay
+- [x] `viewRot` (rotation-only positionMatrix) plumbed through `FrameParams` — MC's MatrixStack pre-translates entity verts by -camPos, so full `view` would double-shift
+- [x] `uploadEntityBatch(layerHash, vertexCount, ByteBuffer)` — count needed for native stride filter (only 36 B accepted; LINES/GLINT/debug dropped)
+- [x] **Exit validated in MC:** mobs render at correct world positions (textures wrong as expected — atlas-reuse first light)
 
 ##### 1.5.2c — Vertex format variants
 - [ ] Glint pipeline (Position + UV0 = 20 B, additive blend)
