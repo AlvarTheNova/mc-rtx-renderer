@@ -12,6 +12,13 @@ import java.nio.ByteBuffer;
  */
 public final class VkResNative {
 
+    static {
+        // Idempotent — NativeBridge already loaded the lib; this just ensures
+        // VkResNative's symbols are resolvable when called from any thread
+        // even if some VkBackend path is first to touch this class.
+        System.loadLibrary("rtx_renderer");
+    }
+
     private VkResNative() {}
 
     // Buffers

@@ -28,28 +28,35 @@ JNIEXPORT void  JNICALL rtxmc_dlss_setFg(JNIEnv*, jclass, jint factor);
 
 // Phase 1.6.1b — VkBackend resource primitives. Mirror MC's GpuDevice
 // creation surface; return opaque uint64_t handles that Java holds.
-JNIEXPORT jlong JNICALL rtxmc_vkres_createBuffer(JNIEnv*, jclass,
-                                                 jint usage, jlong size,
-                                                 jobject optionalInitialData);
-JNIEXPORT void  JNICALL rtxmc_vkres_destroyBuffer(JNIEnv*, jclass, jlong handle);
-JNIEXPORT jobject JNICALL rtxmc_vkres_mapBuffer(JNIEnv*, jclass,
-                                                jlong handle, jlong offset, jlong length);
-JNIEXPORT void  JNICALL rtxmc_vkres_unmapBuffer(JNIEnv*, jclass, jlong handle);
+//
+// Unlike the rtxmc_native_* functions (registered manually in JNI_OnLoad),
+// these use the JNI-standard `Java_<class>_<method>` naming so the JVM
+// auto-resolves them by symbol lookup on first call. Necessary because
+// FindClass("com/rtxmc/gpu/VkResNative") at JNI_OnLoad time returns null
+// under Fabric's Knot classloader (class not yet loaded).
+JNIEXPORT jlong JNICALL Java_com_rtxmc_gpu_VkResNative_createBuffer(
+        JNIEnv*, jclass, jint usage, jlong size, jobject optionalInitialData);
+JNIEXPORT void  JNICALL Java_com_rtxmc_gpu_VkResNative_destroyBuffer(
+        JNIEnv*, jclass, jlong handle);
+JNIEXPORT jobject JNICALL Java_com_rtxmc_gpu_VkResNative_mapBuffer(
+        JNIEnv*, jclass, jlong handle, jlong offset, jlong length);
+JNIEXPORT void  JNICALL Java_com_rtxmc_gpu_VkResNative_unmapBuffer(
+        JNIEnv*, jclass, jlong handle);
 
-JNIEXPORT jlong JNICALL rtxmc_vkres_createTexture(JNIEnv*, jclass,
-                                                  jint usage, jint formatCode,
-                                                  jint width, jint height,
-                                                  jint depthOrLayers, jint mipLevels);
-JNIEXPORT void  JNICALL rtxmc_vkres_destroyTexture(JNIEnv*, jclass, jlong handle);
+JNIEXPORT jlong JNICALL Java_com_rtxmc_gpu_VkResNative_createTexture(
+        JNIEnv*, jclass, jint usage, jint formatCode,
+        jint width, jint height, jint depthOrLayers, jint mipLevels);
+JNIEXPORT void  JNICALL Java_com_rtxmc_gpu_VkResNative_destroyTexture(
+        JNIEnv*, jclass, jlong handle);
 
-JNIEXPORT jlong JNICALL rtxmc_vkres_createTextureView(JNIEnv*, jclass,
-                                                     jlong textureHandle,
-                                                     jint baseMip, jint mipLevels);
-JNIEXPORT void  JNICALL rtxmc_vkres_destroyTextureView(JNIEnv*, jclass, jlong handle);
+JNIEXPORT jlong JNICALL Java_com_rtxmc_gpu_VkResNative_createTextureView(
+        JNIEnv*, jclass, jlong textureHandle, jint baseMip, jint mipLevels);
+JNIEXPORT void  JNICALL Java_com_rtxmc_gpu_VkResNative_destroyTextureView(
+        JNIEnv*, jclass, jlong handle);
 
-JNIEXPORT jlong JNICALL rtxmc_vkres_createSampler(JNIEnv*, jclass,
-                                                  jint addrU, jint addrV,
-                                                  jint minFilter, jint magFilter,
-                                                  jint maxAniso);
-JNIEXPORT void  JNICALL rtxmc_vkres_destroySampler(JNIEnv*, jclass, jlong handle);
+JNIEXPORT jlong JNICALL Java_com_rtxmc_gpu_VkResNative_createSampler(
+        JNIEnv*, jclass, jint addrU, jint addrV,
+        jint minFilter, jint magFilter, jint maxAniso);
+JNIEXPORT void  JNICALL Java_com_rtxmc_gpu_VkResNative_destroySampler(
+        JNIEnv*, jclass, jlong handle);
 }
