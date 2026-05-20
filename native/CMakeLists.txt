@@ -9,6 +9,15 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 find_package(Vulkan REQUIRED)            # ships in LunarG SDK
 find_package(JNI REQUIRED)               # Java 21+ headers
 
+# Phase 1.6.1b — runtime GLSL→SPIR-V via shaderc. Ships inside the Vulkan
+# SDK so no extra deps. We link shaderc_combined (static, no DLL needed).
+find_library(SHADERC_LIB
+    NAMES shaderc_combined
+    HINTS "$ENV{VULKAN_SDK}/Lib" "$ENV{VULKAN_SDK}/lib"
+    REQUIRED)
+set(SHADERC_INCLUDE_DIR "$ENV{VULKAN_SDK}/Include")
+message(STATUS "shaderc_combined: ${SHADERC_LIB}")
+
 # Locate glslangValidator from the Vulkan SDK. Modern cmake's FindVulkan
 # exposes Vulkan::glslangValidator as an imported target, but some installs
 # don't ship the target alias — fall back to find_program.
@@ -90,6 +99,7 @@ add_library(rtx_renderer SHARED
     src/triangle.cpp
     src/chunk_renderer.cpp
     src/entity_renderer.cpp
+    src/vk_resources.cpp
     src/atlas.cpp
     # Generated headers — listed as sources so cmake creates the dep edge.
     ${TRIANGLE_VERT_H}
@@ -113,7 +123,8 @@ target_include_directories(rtx_renderer PRIVATE
     ${Vulkan_INCLUDE_DIRS}
 )
 
-target_link_libraries(rtx_renderer PRIVATE Vulkan::Vulkan)
+target_link_libraries(rtx_renderer PRIVATE Vulkan::Vulkan ${SHADERC_LIB})
+target_include_directories(rtx_renderer PRIVATE ${SHADERC_INCLUDE_DIR})
 
 if(STREAMLINE_FOUND)
     target_compile_definitions(rtx_renderer PRIVATE RTXMC_HAVE_STREAMLINE=1)

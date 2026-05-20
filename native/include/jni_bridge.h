@@ -25,4 +25,31 @@ JNIEXPORT void  JNICALL rtxmc_native_shutdown(JNIEnv*, jclass);
 JNIEXPORT void  JNICALL rtxmc_dlss_setSr(JNIEnv*, jclass, jint preset);
 JNIEXPORT void  JNICALL rtxmc_dlss_setRr(JNIEnv*, jclass, jint preset);
 JNIEXPORT void  JNICALL rtxmc_dlss_setFg(JNIEnv*, jclass, jint factor);
+
+// Phase 1.6.1b — VkBackend resource primitives. Mirror MC's GpuDevice
+// creation surface; return opaque uint64_t handles that Java holds.
+JNIEXPORT jlong JNICALL rtxmc_vkres_createBuffer(JNIEnv*, jclass,
+                                                 jint usage, jlong size,
+                                                 jobject optionalInitialData);
+JNIEXPORT void  JNICALL rtxmc_vkres_destroyBuffer(JNIEnv*, jclass, jlong handle);
+JNIEXPORT jobject JNICALL rtxmc_vkres_mapBuffer(JNIEnv*, jclass,
+                                                jlong handle, jlong offset, jlong length);
+JNIEXPORT void  JNICALL rtxmc_vkres_unmapBuffer(JNIEnv*, jclass, jlong handle);
+
+JNIEXPORT jlong JNICALL rtxmc_vkres_createTexture(JNIEnv*, jclass,
+                                                  jint usage, jint formatCode,
+                                                  jint width, jint height,
+                                                  jint depthOrLayers, jint mipLevels);
+JNIEXPORT void  JNICALL rtxmc_vkres_destroyTexture(JNIEnv*, jclass, jlong handle);
+
+JNIEXPORT jlong JNICALL rtxmc_vkres_createTextureView(JNIEnv*, jclass,
+                                                     jlong textureHandle,
+                                                     jint baseMip, jint mipLevels);
+JNIEXPORT void  JNICALL rtxmc_vkres_destroyTextureView(JNIEnv*, jclass, jlong handle);
+
+JNIEXPORT jlong JNICALL rtxmc_vkres_createSampler(JNIEnv*, jclass,
+                                                  jint addrU, jint addrV,
+                                                  jint minFilter, jint magFilter,
+                                                  jint maxAniso);
+JNIEXPORT void  JNICALL rtxmc_vkres_destroySampler(JNIEnv*, jclass, jlong handle);
 }

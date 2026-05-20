@@ -1,5 +1,6 @@
 #include "jni_bridge.h"
 #include "rtx_renderer.h"
+#include "vk_resources.h"
 
 #include <cstring>
 #include <cstdio>
@@ -21,6 +22,21 @@ const JNINativeMethod kDlssMethods[] = {
     {(char*)"setRayReconstruction", (char*)"(I)V", (void*)rtxmc_dlss_setRr},
     {(char*)"setFrameGeneration",   (char*)"(I)V", (void*)rtxmc_dlss_setFg},
 };
+
+// Phase 1.6.1b: VkBackend resource primitives. Registered onto
+// com.rtxmc.gpu.VkResNative — a stateless utility class on the Java side.
+const JNINativeMethod kVkResMethods[] = {
+    {(char*)"createBuffer",      (char*)"(IJLjava/nio/ByteBuffer;)J", (void*)rtxmc_vkres_createBuffer},
+    {(char*)"destroyBuffer",     (char*)"(J)V",                        (void*)rtxmc_vkres_destroyBuffer},
+    {(char*)"mapBuffer",         (char*)"(JJJ)Ljava/nio/ByteBuffer;",  (void*)rtxmc_vkres_mapBuffer},
+    {(char*)"unmapBuffer",       (char*)"(J)V",                        (void*)rtxmc_vkres_unmapBuffer},
+    {(char*)"createTexture",     (char*)"(IIIIII)J",                   (void*)rtxmc_vkres_createTexture},
+    {(char*)"destroyTexture",    (char*)"(J)V",                        (void*)rtxmc_vkres_destroyTexture},
+    {(char*)"createTextureView", (char*)"(JII)J",                      (void*)rtxmc_vkres_createTextureView},
+    {(char*)"destroyTextureView",(char*)"(J)V",                        (void*)rtxmc_vkres_destroyTextureView},
+    {(char*)"createSampler",     (char*)"(IIIII)J",                    (void*)rtxmc_vkres_createSampler},
+    {(char*)"destroySampler",    (char*)"(J)V",                        (void*)rtxmc_vkres_destroySampler},
+};
 } // namespace
 
 extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
@@ -35,6 +51,13 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
     }
     if (jclass c = env->FindClass("com/rtxmc/render/DlssBridge")) {
         env->RegisterNatives(c, kDlssMethods, sizeof(kDlssMethods) / sizeof(JNINativeMethod));
+    }
+    if (jclass c = env->FindClass("com/rtxmc/gpu/VkResNative")) {
+        env->RegisterNatives(c, kVkResMethods, sizeof(kVkResMethods) / sizeof(JNINativeMethod));
+    } else {
+        // Not fatal — Java side may not have loaded yet. Class init triggers
+        // re-registration via System.loadLibrary's per-class hook.
+        env->ExceptionClear();
     }
     return JNI_VERSION_21;
 }
@@ -96,3 +119,60 @@ JNIEXPORT void JNICALL rtxmc_native_uploadEntityBatch(JNIEnv* env, jclass,
 JNIEXPORT void JNICALL rtxmc_dlss_setSr(JNIEnv*, jclass, jint p) { rtxmc::rtx_set_super_resolution(p); }
 JNIEXPORT void JNICALL rtxmc_dlss_setRr(JNIEnv*, jclass, jint p) { rtxmc::rtx_set_ray_reconstruction(p); }
 JNIEXPORT void JNICALL rtxmc_dlss_setFg(JNIEnv*, jclass, jint f) { rtxmc::rtx_set_frame_generation(f); }
+
+// ---- VkBackend resource primitives ----------------------------------------
+
+JNIEXPORT jlong JNICALL rtxmc_vkres_createBuffer(JNIEnv* env, jclass,
+                                                 jint usage, jlong size,
+                                                 jobject initial) {
+    const void* data = nullptr;
+    if (initial) data = env->GetDirectBufferAddress(initial);
+    return (jlong)rtxmc::vkres_create_buffer((uint32_t)usage, (uint64_t)size, data);
+}
+JNIEXPORT void JNICALL rtxmc_vkres_destroyBuffer(JNIEnv*, jclass, jlong h) {
+    rtxmc::vkres_destroy_buffer((uint64_t)h);
+}
+JNIEXPORT jobject JNICALL rtxmc_vkres_mapBuffer(JNIEnv* env, jclass,
+                                                jlong h, jlong off, jlong len) {
+    void* p = rtxmc::vkres_map_buffer((uint64_t)h, (uint64_t)off, (uint64_t)len);
+    if (!p) return nullptr;
+    auto ref = rtxmc::vkres_buffer_ref((uint64_t)h);
+    jlong cap = (len == 0) ? (jlong)(ref.size - off) : len;
+    return env->NewDirectByteBuffer(p, cap);
+}
+JNIEXPORT void JNICALL rtxmc_vkres_unmapBuffer(JNIEnv*, jclass, jlong h) {
+    rtxmc::vkres_unmap_buffer((uint64_t)h);
+}
+
+JNIEXPORT jlong JNICALL rtxmc_vkres_createTexture(JNIEnv*, jclass,
+                                                  jint usage, jint fmt,
+                                                  jint w, jint h,
+                                                  jint depth, jint mips) {
+    return (jlong)rtxmc::vkres_create_texture((uint32_t)usage, (uint32_t)fmt,
+                                              (uint32_t)w, (uint32_t)h,
+                                              (uint32_t)depth, (uint32_t)mips);
+}
+JNIEXPORT void JNICALL rtxmc_vkres_destroyTexture(JNIEnv*, jclass, jlong h) {
+    rtxmc::vkres_destroy_texture((uint64_t)h);
+}
+
+JNIEXPORT jlong JNICALL rtxmc_vkres_createTextureView(JNIEnv*, jclass,
+                                                     jlong tex, jint baseMip, jint mips) {
+    return (jlong)rtxmc::vkres_create_texture_view((uint64_t)tex,
+                                                   (uint32_t)baseMip, (uint32_t)mips);
+}
+JNIEXPORT void JNICALL rtxmc_vkres_destroyTextureView(JNIEnv*, jclass, jlong h) {
+    rtxmc::vkres_destroy_texture_view((uint64_t)h);
+}
+
+JNIEXPORT jlong JNICALL rtxmc_vkres_createSampler(JNIEnv*, jclass,
+                                                  jint u, jint v,
+                                                  jint minF, jint magF,
+                                                  jint aniso) {
+    return (jlong)rtxmc::vkres_create_sampler((uint32_t)u, (uint32_t)v,
+                                              (uint32_t)minF, (uint32_t)magF,
+                                              (uint32_t)aniso);
+}
+JNIEXPORT void JNICALL rtxmc_vkres_destroySampler(JNIEnv*, jclass, jlong h) {
+    rtxmc::vkres_destroy_sampler((uint64_t)h);
+}
