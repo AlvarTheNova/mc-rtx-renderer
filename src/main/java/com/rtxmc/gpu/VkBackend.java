@@ -42,6 +42,10 @@ public final class VkBackend implements GpuDevice {
 
     /** First N calls per method get logged; further calls are silent. */
     private static final int LOG_BUDGET = 3;
+    /** First N calls per method also shadow-create a real VK resource to
+     *  prove our native code path works. After this budget runs out we
+     *  stop creating shadows (zero steady-state overhead). */
+    private static final int SHADOW_BUDGET = 3;
     private final ConcurrentHashMap<String, AtomicInteger> callCounts = new ConcurrentHashMap<>();
 
     public VkBackend(GpuDevice wrapped) {
@@ -49,10 +53,25 @@ public final class VkBackend implements GpuDevice {
         RtxMod.LOG.info("rtxmc VkBackend installed (wrapping {})", wrapped.getClass().getName());
     }
 
-    private void trace(String method) {
+    private int trace(String method) {
         int n = callCounts.computeIfAbsent(method, k -> new AtomicInteger()).incrementAndGet();
         if (n <= LOG_BUDGET) {
             RtxMod.LOG.info("[vk-backend] {} (call #{})", method, n);
+        }
+        return n;
+    }
+
+    private boolean shouldShadow(String method) {
+        AtomicInteger c = callCounts.get(method);
+        return c != null && c.get() <= SHADOW_BUDGET;
+    }
+
+    /** Best-effort shadow runner. Catches everything because we don't want
+     *  a bug in our impl to take down vanilla rendering. */
+    private void shadowSafely(String label, Runnable r) {
+        try { r.run(); }
+        catch (Throwable t) {
+            RtxMod.LOG.error("[vk-backend] shadow {} threw", label, t);
         }
     }
 
@@ -84,6 +103,14 @@ public final class VkBackend implements GpuDevice {
                                               FilterMode minFilter, FilterMode magFilter,
                                               int maxAniso, OptionalDouble maxLOD) {
         trace("createSampler");
+        if (shouldShadow("createSampler")) shadowSafely("createSampler", () -> {
+            long h = VkResNative.createSampler(addrU.ordinal(), addrV.ordinal(),
+                                               minFilter.ordinal(), magFilter.ordinal(),
+                                               Math.max(1, maxAniso));
+            RtxMod.LOG.info("[vk-backend] shadow createSampler h=0x{} addr=({},{}) filter=({},{}) aniso={}",
+                    Long.toHexString(h), addrU, addrV, minFilter, magFilter, maxAniso);
+            if (h != 0L) VkResNative.destroySampler(h);
+        });
         return wrapped.createSampler(addrU, addrV, minFilter, magFilter, maxAniso, maxLOD);
     }
 
@@ -91,13 +118,27 @@ public final class VkBackend implements GpuDevice {
                                               TextureFormat format, int w, int h,
                                               int depthOrLayers, int mipLevels) {
         trace("createTexture(Supplier)");
+        rtxmc$shadowCreateTexture("createTexture(Supplier)", usage, format, w, h, depthOrLayers, mipLevels);
         return wrapped.createTexture(labelGetter, usage, format, w, h, depthOrLayers, mipLevels);
     }
     @Override public GpuTexture createTexture(String label, int usage,
                                               TextureFormat format, int w, int h,
                                               int depthOrLayers, int mipLevels) {
         trace("createTexture(String)");
+        rtxmc$shadowCreateTexture("createTexture(String)", usage, format, w, h, depthOrLayers, mipLevels);
         return wrapped.createTexture(label, usage, format, w, h, depthOrLayers, mipLevels);
+    }
+
+    private void rtxmc$shadowCreateTexture(String method, int usage, TextureFormat fmt,
+                                            int w, int h, int depth, int mips) {
+        if (!shouldShadow(method)) return;
+        shadowSafely(method, () -> {
+            long handle = VkResNative.createTexture(usage, fmt.ordinal(), w, h, depth, mips);
+            RtxMod.LOG.info("[vk-backend] shadow {} h=0x{} {}x{} fmt={} usage=0x{} mips={}",
+                    method, Long.toHexString(handle), w, h, fmt,
+                    Integer.toHexString(usage), mips);
+            if (handle != 0L) VkResNative.destroyTexture(handle);
+        });
     }
 
     @Override public GpuTextureView createTextureView(GpuTexture tex) {
@@ -107,14 +148,39 @@ public final class VkBackend implements GpuDevice {
     @Override public GpuTextureView createTextureView(GpuTexture tex, int baseMip, int mipLevels) {
         trace("createTextureView(mip)");
         return wrapped.createTextureView(tex, baseMip, mipLevels);
+        // Shadow disabled here: requires a VkGpuTexture handle which only
+        // exists once createTexture itself is real (1.6.1c). Until then GL
+        // textures don't carry our native handle.
     }
 
     @Override public GpuBuffer createBuffer(Supplier<String> labelGetter, int usage, long size) {
         trace("createBuffer(size)");
+        if (shouldShadow("createBuffer(size)")) shadowSafely("createBuffer(size)", () -> {
+            long h = VkResNative.createBuffer(usage, size, null);
+            RtxMod.LOG.info("[vk-backend] shadow createBuffer(size) h=0x{} usage=0x{} size={}",
+                    Long.toHexString(h), Integer.toHexString(usage), size);
+            if (h != 0L) VkResNative.destroyBuffer(h);
+        });
         return wrapped.createBuffer(labelGetter, usage, size);
     }
     @Override public GpuBuffer createBuffer(Supplier<String> labelGetter, int usage, ByteBuffer data) {
         trace("createBuffer(data)");
+        if (shouldShadow("createBuffer(data)")) shadowSafely("createBuffer(data)", () -> {
+            // MC may hand us non-direct ByteBuffers; copy into a direct one
+            // for the JNI GetDirectBufferAddress path.
+            ByteBuffer direct = data;
+            if (!data.isDirect()) {
+                direct = ByteBuffer.allocateDirect(data.remaining());
+                int p = data.position();
+                direct.put(data.duplicate());
+                direct.flip();
+                data.position(p); // restore caller's position
+            }
+            long h = VkResNative.createBuffer(usage, direct.remaining(), direct);
+            RtxMod.LOG.info("[vk-backend] shadow createBuffer(data) h=0x{} usage=0x{} bytes={}",
+                    Long.toHexString(h), Integer.toHexString(usage), direct.remaining());
+            if (h != 0L) VkResNative.destroyBuffer(h);
+        });
         return wrapped.createBuffer(labelGetter, usage, data);
     }
 
