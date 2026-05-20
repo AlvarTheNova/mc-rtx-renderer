@@ -154,8 +154,16 @@ uint64_t alloc_handle() {
 
 // ---- Buffers ---------------------------------------------------------------
 
+// MC calls createBuffer/createTexture/etc. during RenderSystem.initRenderer
+// — BEFORE our rtx_init() creates the VkDevice. Bail cleanly during that
+// window; shadow-exec paths handle a 0 return as "device not ready, no-op".
+static bool device_ready() {
+    return ctx().device != VK_NULL_HANDLE;
+}
+
 uint64_t vkres_create_buffer(uint32_t usage, uint64_t size, const void* initial_data) {
     if (size == 0) return 0;
+    if (!device_ready()) return 0;
     auto& c = ctx();
 
     VkBufferCreateInfo bci{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
@@ -259,6 +267,7 @@ uint64_t vkres_create_texture(uint32_t usage, uint32_t format_code,
                               uint32_t width, uint32_t height,
                               uint32_t depth_or_layers, uint32_t mip_levels) {
     if (width == 0 || height == 0) return 0;
+    if (!device_ready()) return 0;
     auto& c = ctx();
 
     VkImageCreateInfo ici{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
@@ -328,6 +337,7 @@ void vkres_destroy_texture(uint64_t handle) {
 
 uint64_t vkres_create_texture_view(uint64_t texture_handle,
                                    uint32_t base_mip, uint32_t mip_levels) {
+    if (!device_ready()) return 0;
     VkImage img = VK_NULL_HANDLE;
     VkFormat fmt = VK_FORMAT_UNDEFINED;
     {
@@ -384,6 +394,7 @@ void vkres_destroy_texture_view(uint64_t handle) {
 uint64_t vkres_create_sampler(uint32_t addr_u, uint32_t addr_v,
                               uint32_t min_filter, uint32_t mag_filter,
                               uint32_t max_aniso) {
+    if (!device_ready()) return 0;
     VkSamplerCreateInfo sci{VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
     sci.magFilter    = translate_filter_mode(mag_filter);
     sci.minFilter    = translate_filter_mode(min_filter);
