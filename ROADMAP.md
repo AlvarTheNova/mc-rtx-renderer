@@ -193,9 +193,8 @@ Realistic subdivision — original "Phase 1" was 2-3 months of work, not weeks.
 #### 1.6.1d — Pipeline compilation (GLSL → SPIR-V → VkGraphicsPipeline)
 - [x] **Step 1 ✓ shipped:** shaderc wrapper (vk_shaderc.h/cpp) with thread-safe `shaderc::Compiler`, FNV-1a source-hash cache, vk1.3/SPIR-V 1.6 target. Validated in-MC: trivial vert/frag compiled to 184/100 SPIR-V words (4.5 MB dll growth from glslang+SPIRV-Tools bundling).
 - [x] **Step 2 ✓ shipped:** vk_pipeline.cpp — full state translation tables (DrawMode→Topology, PolygonMode, DepthTestFunction, SourceFactor/DestFactor, VertexFormatElement.Type+count→VkFormat). Validated in-MC: hardcoded Position-only/TRIANGLES/alpha-blend spec built handle h=0x1 cleanly via shaderc→VkShaderModule→VkGraphicsPipeline. JNI: testCreatePipeline / destroyPipeline.
-- [ ] **Step 3 next:** `precompilePipeline(RenderPipeline, ShaderSourceGetter)` Java path — extract state from RenderPipeline + GLSL via ShaderSourceGetter, call native createPipeline (real, not test)
-- [ ] **Step 4:** `VkCompiledRenderPipeline implements CompiledRenderPipeline` holds the VkPipeline handle
-- [ ] **Step 5:** Cache pipelines by RenderPipeline.getLocation() so identical specs don't recompile
+- [x] **Step 3-4 ✓ shipped + validated:** `VkPipelineSpecPacker` extracts RenderPipeline state into packed ByteBuffer. `VkCompiledRenderPipeline implements CompiledRenderPipeline`. VkBackend.precompilePipeline shadow-tests against real Mojang shaders. **In-MC: 3 real pipelines built — `minecraft:pipeline/gui` (h=0x2), `gui_textured` (h=0x3), `opaque_particle` (h=0x4)** — all QUADS topology, vertex formats 16/24/28 B. Hotfix: enabled shaderc `SetAutoBindUniforms` + `SetAutoMapLocations` because Mojang's GLSL is GL-style without explicit layout qualifiers.
+- [ ] **Step 5 deferred:** caching by `getLocation()` — current shaderc internal cache handles it for the GLSL phase; pipeline-object cache wanted but not blocking 1.6.1e.
 
 #### 1.6.1e — CommandEncoder + RenderPass
 - [ ] `VkCommandEncoder implements CommandEncoder` — records into our existing per-frame VkCommandBuffer
