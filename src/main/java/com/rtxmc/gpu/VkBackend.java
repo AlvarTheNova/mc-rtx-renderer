@@ -4,6 +4,7 @@ import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.pipeline.CompiledRenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.systems.CommandEncoder;
+import com.mojang.blaze3d.shaders.ShaderType;
 import com.mojang.blaze3d.systems.GpuDevice;
 import com.mojang.blaze3d.textures.AddressMode;
 import com.mojang.blaze3d.textures.FilterMode;
@@ -13,6 +14,7 @@ import com.mojang.blaze3d.textures.TextureFormat;
 import com.rtxmc.RtxMod;
 import net.minecraft.client.gl.GpuSampler;
 import net.minecraft.client.gl.ShaderSourceGetter;
+import net.minecraft.util.Identifier;
 
 import java.nio.ByteBuffer;
 import java.util.List;
@@ -220,7 +222,39 @@ public final class VkBackend implements GpuDevice {
 
     @Override public CompiledRenderPipeline precompilePipeline(RenderPipeline pipeline, ShaderSourceGetter sourceGetter) {
         trace("precompilePipeline(2-arg)");
+        if (shouldShadow("precompilePipeline(2-arg)")) {
+            rtxmc$shadowPrecompile(pipeline, sourceGetter);
+        }
         return wrapped.precompilePipeline(pipeline, sourceGetter);
+    }
+
+    /** Phase 1.6.1d step 3 shadow — extract state from RenderPipeline, pull
+     *  GLSL via ShaderSourceGetter, build a real VkPipeline, log + destroy.
+     *  Doesn't return our pipeline yet (no descriptor sets / uniforms wired
+     *  until 1.6.1e); proves the state extraction + pipeline build works for
+     *  Mojang's real shader specs. */
+    private void rtxmc$shadowPrecompile(RenderPipeline pipeline, ShaderSourceGetter sourceGetter) {
+        shadowSafely("precompilePipeline", () -> {
+            Identifier vertId = pipeline.getVertexShader();
+            Identifier fragId = pipeline.getFragmentShader();
+            String vertGlsl = sourceGetter.get(vertId, ShaderType.VERTEX);
+            String fragGlsl = sourceGetter.get(fragId, ShaderType.FRAGMENT);
+            if (vertGlsl == null || fragGlsl == null) {
+                RtxMod.LOG.warn("[vk-backend] shadow precompile: missing GLSL for {} / {}", vertId, fragId);
+                return;
+            }
+            java.nio.ByteBuffer spec = VkPipelineSpecPacker.pack(pipeline);
+            String label = pipeline.getLocation().toString();
+            long handle = VkResNative.createPipeline(vertGlsl, fragGlsl, label, spec);
+            if (handle != 0L) {
+                RtxMod.LOG.info("[vk-backend] shadow precompile ok: {} h=0x{} (vert={} frag={} attrs={})",
+                        label, Long.toHexString(handle), vertId, fragId, pipeline.getVertexFormat().getElements().size());
+                VkResNative.destroyPipeline(handle);
+            } else {
+                RtxMod.LOG.warn("[vk-backend] shadow precompile FAILED: {} (vert={} frag={})",
+                        label, vertId, fragId);
+            }
+        });
     }
 
     @Override public void clearPipelineCache() {

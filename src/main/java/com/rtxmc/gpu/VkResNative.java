@@ -52,4 +52,9 @@ public final class VkResNative {
      *  Returns native pipeline handle on success, 0 on failure. */
     public static native long testCreatePipeline(String vertGlsl, String fragGlsl);
     public static native void destroyPipeline(long handle);
+
+    /** Phase 1.6.1d step 3 — real pipeline build. State packed into a direct
+     *  ByteBuffer via {@link VkPipelineSpecPacker}. Returns native handle. */
+    public static native long createPipeline(String vertGlsl, String fragGlsl,
+                                             String label, java.nio.ByteBuffer spec);
 }

@@ -234,3 +234,58 @@ extern "C" JNIEXPORT void JNICALL
 Java_com_rtxmc_gpu_VkResNative_destroyPipeline(JNIEnv*, jclass, jlong h) {
     rtxmc::vkpipe_destroy((uint64_t)h);
 }
+
+// Real pipeline creation — state comes from a packed direct ByteBuffer
+// (see Java VkPipelineSpecPacker for the layout). Returns 0 on failure.
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_rtxmc_gpu_VkResNative_createPipeline(JNIEnv* env, jclass,
+                                              jstring jvert, jstring jfrag,
+                                              jstring jlabel, jobject jspec) {
+    if (!jspec) return 0;
+    auto* p = (const uint32_t*)env->GetDirectBufferAddress(jspec);
+    if (!p) return 0;
+    jlong cap = env->GetDirectBufferCapacity(jspec);
+    if (cap < (jlong)(14 * sizeof(uint32_t))) return 0;
+
+    rtxmc::VkPipelineSpec spec{};
+    spec.topology         = p[0];
+    spec.polygon_mode     = p[1];
+    spec.cull             = p[2];
+    spec.depth_test_func  = p[3];
+    uint32_t flags        = p[4];
+    spec.write_depth      = (flags >> 0) & 1u;
+    spec.write_color      = (flags >> 1) & 1u;
+    spec.write_alpha      = (flags >> 2) & 1u;
+    spec.blend_enabled    = p[5];
+    spec.blend_src_color  = p[6];
+    spec.blend_dst_color  = p[7];
+    spec.blend_src_alpha  = p[8];
+    spec.blend_dst_alpha  = p[9];
+    spec.vertex_stride    = p[10];
+    spec.color_format_code= p[11];
+    spec.depth_attachment = p[12];
+    uint32_t attr_count   = p[13];
+
+    const jlong required = (jlong)(14 + 4 * attr_count) * (jlong)sizeof(uint32_t);
+    if (cap < required) return 0;
+
+    spec.attrs.reserve(attr_count);
+    const uint32_t* a = p + 14;
+    for (uint32_t i = 0; i < attr_count; ++i) {
+        rtxmc::VkVertexAttrSpec attr{};
+        attr.location  = a[i*4 + 0];
+        attr.type_code = a[i*4 + 1];
+        attr.count     = a[i*4 + 2];
+        attr.offset    = a[i*4 + 3];
+        spec.attrs.push_back(attr);
+    }
+
+    const char* vert  = env->GetStringUTFChars(jvert,  nullptr);
+    const char* frag  = env->GetStringUTFChars(jfrag,  nullptr);
+    const char* label = jlabel ? env->GetStringUTFChars(jlabel, nullptr) : "pipeline";
+    uint64_t h = rtxmc::vkpipe_create(vert ? vert : "", frag ? frag : "", spec, label);
+    if (vert)  env->ReleaseStringUTFChars(jvert,  vert);
+    if (frag)  env->ReleaseStringUTFChars(jfrag,  frag);
+    if (jlabel && label) env->ReleaseStringUTFChars(jlabel, label);
+    return (jlong)h;
+}
