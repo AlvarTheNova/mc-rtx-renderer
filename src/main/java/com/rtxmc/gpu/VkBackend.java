@@ -132,7 +132,12 @@ public final class VkBackend implements GpuDevice {
 
     @Override public CommandEncoder createCommandEncoder() {
         trace("createCommandEncoder");
-        return wrapped.createCommandEncoder();
+        // Phase 1.6.1e foundations — wrap the GL encoder in our tracing
+        // VkCommandEncoder so we learn which encoder/pass methods MC actually
+        // calls per frame. Each frame creates a fresh encoder, so per-instance
+        // counters wouldn't exhaust; VkCommandEncoder uses static class-level
+        // counters across all instances.
+        return new VkCommandEncoder(wrapped.createCommandEncoder());
     }
 
     @Override public GpuSampler createSampler(AddressMode addrU, AddressMode addrV,
