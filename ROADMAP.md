@@ -192,8 +192,8 @@ Realistic subdivision — original "Phase 1" was 2-3 months of work, not weeks.
 
 #### 1.6.1d — Pipeline compilation (GLSL → SPIR-V → VkGraphicsPipeline)
 - [x] **Step 1 ✓ shipped:** shaderc wrapper (vk_shaderc.h/cpp) with thread-safe `shaderc::Compiler`, FNV-1a source-hash cache, vk1.3/SPIR-V 1.6 target. Validated in-MC: trivial vert/frag compiled to 184/100 SPIR-V words (4.5 MB dll growth from glslang+SPIRV-Tools bundling).
-- [ ] **Step 2 next:** vk_pipeline.cpp — RenderPipeline state translation (blend/depth/cull/polygon/vertex format/drawmode) → VkGraphicsPipeline
-- [ ] **Step 3:** `precompilePipeline(RenderPipeline, ShaderSourceGetter)` Java path — pull GLSL via ShaderSourceGetter, call native createPipeline
+- [x] **Step 2 ✓ shipped:** vk_pipeline.cpp — full state translation tables (DrawMode→Topology, PolygonMode, DepthTestFunction, SourceFactor/DestFactor, VertexFormatElement.Type+count→VkFormat). Validated in-MC: hardcoded Position-only/TRIANGLES/alpha-blend spec built handle h=0x1 cleanly via shaderc→VkShaderModule→VkGraphicsPipeline. JNI: testCreatePipeline / destroyPipeline.
+- [ ] **Step 3 next:** `precompilePipeline(RenderPipeline, ShaderSourceGetter)` Java path — extract state from RenderPipeline + GLSL via ShaderSourceGetter, call native createPipeline (real, not test)
 - [ ] **Step 4:** `VkCompiledRenderPipeline implements CompiledRenderPipeline` holds the VkPipeline handle
 - [ ] **Step 5:** Cache pipelines by RenderPipeline.getLocation() so identical specs don't recompile
 
