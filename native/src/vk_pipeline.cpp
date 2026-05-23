@@ -1,5 +1,6 @@
 #include "vk_pipeline.h"
 #include "vk_shaderc.h"
+#include "vk_reflect.h"
 #include "vulkan_context.h"
 
 #include <vulkan/vulkan.h>
@@ -174,6 +175,31 @@ uint64_t vkpipe_create(std::string_view vert_glsl, std::string_view frag_glsl,
         log("vkpipe_create: shader compile failed (%s)", label_s.c_str());
         g_build_failures.fetch_add(1, std::memory_order_relaxed);
         return 0;
+    }
+
+    // Phase 1.6.1e — reflect both stages so we can see what binding slots
+    // shaderc's auto-mapper assigned. 1.6.1e+1 will USE this to build real
+    // VkDescriptorSetLayouts; for now just surface them in logs.
+    {
+        auto vrefl = reflect_spirv(vs_spirv.data(), vs_spirv.size(), (label_s + "[vs]").c_str());
+        auto frefl = reflect_spirv(fs_spirv.data(), fs_spirv.size(), (label_s + "[fs]").c_str());
+        size_t total = vrefl.bindings.size() + frefl.bindings.size();
+        if (total > 0) {
+            log("reflect %s: %zu bindings (vs=%zu fs=%zu)", label_s.c_str(), total,
+                vrefl.bindings.size(), frefl.bindings.size());
+            auto dump = [&](const char* stage, const ReflectionResult& r) {
+                for (const auto& b : r.bindings) {
+                    const char* kind = b.kind == ResourceKind::SampledImage  ? "sampler"
+                                    : b.kind == ResourceKind::UniformBuffer ? "ubo"
+                                    : b.kind == ResourceKind::StorageBuffer ? "ssbo"
+                                    : "push";
+                    log("  %s.%s '%s' set=%u binding=%u arr=%u",
+                        stage, kind, b.name.c_str(), b.descriptor_set, b.binding, b.array_size);
+                }
+            };
+            dump("vs", vrefl);
+            dump("fs", frefl);
+        }
     }
 
     VkShaderModule vs = make_module(c.device, vs_spirv);

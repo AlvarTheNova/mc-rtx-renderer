@@ -18,6 +18,15 @@ find_library(SHADERC_LIB
 set(SHADERC_INCLUDE_DIR "$ENV{VULKAN_SDK}/Include")
 message(STATUS "shaderc_combined: ${SHADERC_LIB}")
 
+# Phase 1.6.1e — SPIR-V reflection via spirv-cross. Needed to discover the
+# binding numbers shaderc auto-assigned to Mojang's bindless GLSL so we can
+# build matching VkDescriptorSetLayouts. Three static libs cover the C++
+# Compiler reflection API.
+find_library(SPIRV_CROSS_CPP_LIB  NAMES spirv-cross-cpp  HINTS "$ENV{VULKAN_SDK}/Lib" REQUIRED)
+find_library(SPIRV_CROSS_GLSL_LIB NAMES spirv-cross-glsl HINTS "$ENV{VULKAN_SDK}/Lib" REQUIRED)
+find_library(SPIRV_CROSS_CORE_LIB NAMES spirv-cross-core HINTS "$ENV{VULKAN_SDK}/Lib" REQUIRED)
+message(STATUS "spirv-cross: ${SPIRV_CROSS_CPP_LIB}")
+
 # Locate glslangValidator from the Vulkan SDK. Modern cmake's FindVulkan
 # exposes Vulkan::glslangValidator as an imported target, but some installs
 # don't ship the target alias — fall back to find_program.
@@ -102,6 +111,7 @@ add_library(rtx_renderer SHARED
     src/vk_resources.cpp
     src/vk_shaderc.cpp
     src/vk_pipeline.cpp
+    src/vk_reflect.cpp
     src/atlas.cpp
     # Generated headers — listed as sources so cmake creates the dep edge.
     ${TRIANGLE_VERT_H}
@@ -125,7 +135,14 @@ target_include_directories(rtx_renderer PRIVATE
     ${Vulkan_INCLUDE_DIRS}
 )
 
-target_link_libraries(rtx_renderer PRIVATE Vulkan::Vulkan ${SHADERC_LIB})
+target_link_libraries(rtx_renderer PRIVATE
+    Vulkan::Vulkan
+    ${SHADERC_LIB}
+    # spirv-cross link order matters: cpp depends on glsl which depends on core
+    ${SPIRV_CROSS_CPP_LIB}
+    ${SPIRV_CROSS_GLSL_LIB}
+    ${SPIRV_CROSS_CORE_LIB}
+)
 target_include_directories(rtx_renderer PRIVATE ${SHADERC_INCLUDE_DIR})
 
 if(STREAMLINE_FOUND)
