@@ -197,10 +197,12 @@ Realistic subdivision — original "Phase 1" was 2-3 months of work, not weeks.
 - [ ] **Step 5 deferred:** caching by `getLocation()` — current shaderc internal cache handles it for the GLSL phase; pipeline-object cache wanted but not blocking 1.6.1e.
 
 #### 1.6.1e — CommandEncoder + RenderPass
-- [ ] `VkCommandEncoder implements CommandEncoder` — records into our existing per-frame VkCommandBuffer
-- [ ] `VkRenderPass implements RenderPass` — vkCmdBeginRendering / vkCmdSetPipeline / vkCmdDraw state machine
-- [ ] Frame timing tweak: open cmd buf at WorldRenderer.render HEAD (not in our existing rtx_render_frame which currently both opens and submits)
-- [ ] MC's HUD encoder/pass calls then record into our active cmd buf naturally
+- [x] **Foundations ✓ shipped:** VkCommandEncoder + VkRenderPass tracing wrappers (Java only; delegate everything to GL). Priority audit harvested in-MC: **22 of 26 methods called many times** per session. Pushed/popped DebugGroup, copyTextureToBuffer, copyTextureToTexture, timer queries — not called this session, defer.
+- [ ] **Native impl, hot methods:** vk_encoder.h/cpp with VkCommandEncoder + VkRenderPass state machines. Records into per-frame VkCommandBuffer. ~22 methods.
+- [ ] **Frame timing restructure:** open cmd buf at WorldRenderer.render HEAD (not in rtx_render_frame which currently both opens AND submits). Submit at RenderSystem.flipFrame so MC's HUD encoder calls land in the same buffer.
+- [ ] **Descriptor-set strategy for bindTexture/setUniform:** likely spirv-cross reflection out of compiled SPIR-V to get the auto-assigned binding numbers, then map them to VkDescriptorSet writes. Alternative: pre-rewrite Mojang GLSL with explicit `layout(binding=)`.
+- [ ] mapBuffer: return direct ByteBuffer over HOST_VISIBLE memory.
+- [ ] **Exit:** MC HUD/Screen draws record into our cmd buf. May not be visible yet because we still need 1.6.1f to actually USE our Vk* resources instead of GL ones.
 
 #### 1.6.1f — Swap from shadow to real Vk* returns
 - [ ] VkBackend.createBuffer/Texture/Sampler return our Vk* instances instead of GL ones (no more shadow-discard)
