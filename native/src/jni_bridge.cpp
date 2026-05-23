@@ -2,6 +2,7 @@
 #include "rtx_renderer.h"
 #include "vk_resources.h"
 #include "vk_shaderc.h"
+#include "vk_pipeline.h"
 
 #include <cstring>
 #include <cstdio>
@@ -190,4 +191,46 @@ Java_com_rtxmc_gpu_VkResNative_testCompileShader(JNIEnv* env, jclass,
     if (source) env->ReleaseStringUTFChars(jsource, source);
     if (jlabel && label) env->ReleaseStringUTFChars(jlabel, label);
     return spirv.empty() ? -1 : (jint)spirv.size();
+}
+
+// ---- Pipeline smoke test (1.6.1d step 2) -----------------------------------
+// Builds a tiny pipeline with hardcoded TRIANGLE_LIST + alpha blend + Position-
+// only vertex format. Validates the full GLSL → SPIR-V → VkGraphicsPipeline
+// path without needing real RenderPipeline state. Returns the handle on
+// success, 0 on failure.
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_rtxmc_gpu_VkResNative_testCreatePipeline(JNIEnv* env, jclass,
+                                                  jstring jvert, jstring jfrag) {
+    const char* vert = env->GetStringUTFChars(jvert, nullptr);
+    const char* frag = env->GetStringUTFChars(jfrag, nullptr);
+
+    rtxmc::VkPipelineSpec spec{};
+    spec.topology         = 4;  // TRIANGLES
+    spec.polygon_mode     = 0;  // FILL
+    spec.cull             = 0;  // no cull
+    spec.depth_test_func  = 0;  // NO_DEPTH_TEST
+    spec.write_depth      = 0;
+    spec.write_color      = 1;
+    spec.write_alpha      = 1;
+    spec.blend_enabled    = 1;
+    spec.blend_src_color  = 11; // SRC_ALPHA
+    spec.blend_dst_color  = 9;  // ONE_MINUS_SRC_ALPHA
+    spec.blend_src_alpha  = 4;  // ONE
+    spec.blend_dst_alpha  = 13; // ZERO (DstFactor ord 13)
+    spec.vertex_stride    = 12; // vec3 position
+    spec.attrs.push_back({0, 0, 3, 0}); // location 0, type=FLOAT, count=3, offset=0
+    spec.color_format_code = 0;  // RGBA8
+    spec.depth_attachment  = 0;  // no depth
+
+    uint64_t h = rtxmc::vkpipe_create(
+            vert ? vert : "", frag ? frag : "",
+            spec, "smoke-test-pipeline");
+
+    if (vert) env->ReleaseStringUTFChars(jvert, vert);
+    if (frag) env->ReleaseStringUTFChars(jfrag, frag);
+    return (jlong)h;
+}
+extern "C" JNIEXPORT void JNICALL
+Java_com_rtxmc_gpu_VkResNative_destroyPipeline(JNIEnv*, jclass, jlong h) {
+    rtxmc::vkpipe_destroy((uint64_t)h);
 }

@@ -47,4 +47,9 @@ public final class VkResNative {
      *  negative on failure (-1=compile error, -2=bad stage code).
      *  stage: 0 = vertex, 1 = fragment. */
     public static native int testCompileShader(String glsl, int stage, String label);
+
+    /** Phase 1.6.1d step 2 — build a tiny pipeline with hardcoded state.
+     *  Returns native pipeline handle on success, 0 on failure. */
+    public static native long testCreatePipeline(String vertGlsl, String fragGlsl);
+    public static native void destroyPipeline(long handle);
 }

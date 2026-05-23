@@ -54,11 +54,18 @@ public final class VkBackend implements GpuDevice {
         rtxmc$shadercSmokeTest();
     }
 
-    /** Phase 1.6.1d one-shot: compile a trivial vert+frag pair via shaderc
-     *  so we know the toolchain links + runs before anyone depends on it. */
+    /** Phase 1.6.1d one-shot: compile a trivial vert+frag pair via shaderc,
+     *  then build a real VkGraphicsPipeline from them. Validates GLSL→SPIR-V
+     *  → VkPipeline end-to-end before anyone depends on it. */
     private static void rtxmc$shadercSmokeTest() {
-        final String vert = "#version 450\nvoid main(){ gl_Position = vec4(0); }\n";
-        final String frag = "#version 450\nlayout(location=0) out vec4 c;\nvoid main(){ c = vec4(1); }\n";
+        // Vertex shader expects a single vec3 position attribute at location 0
+        // (matches the hardcoded spec in vkpipe_create's smoke entry point).
+        final String vert = "#version 450\n"
+                          + "layout(location=0) in vec3 a_pos;\n"
+                          + "void main(){ gl_Position = vec4(a_pos, 1.0); }\n";
+        final String frag = "#version 450\n"
+                          + "layout(location=0) out vec4 c;\n"
+                          + "void main(){ c = vec4(1, 0, 1, 1); }\n";
         try {
             int vWords = VkResNative.testCompileShader(vert, 0, "smoke-test-vert");
             int fWords = VkResNative.testCompileShader(frag, 1, "smoke-test-frag");
@@ -66,9 +73,17 @@ public final class VkBackend implements GpuDevice {
                 RtxMod.LOG.info("rtxmc shaderc smoke-test ok: vert={} words, frag={} words", vWords, fWords);
             } else {
                 RtxMod.LOG.error("rtxmc shaderc smoke-test FAILED: vWords={} fWords={}", vWords, fWords);
+                return;
+            }
+            long pipelineHandle = VkResNative.testCreatePipeline(vert, frag);
+            if (pipelineHandle != 0L) {
+                RtxMod.LOG.info("rtxmc vk_pipeline smoke-test ok: handle=0x{}", Long.toHexString(pipelineHandle));
+                VkResNative.destroyPipeline(pipelineHandle);
+            } else {
+                RtxMod.LOG.error("rtxmc vk_pipeline smoke-test FAILED (handle=0)");
             }
         } catch (Throwable t) {
-            RtxMod.LOG.error("rtxmc shaderc smoke-test threw", t);
+            RtxMod.LOG.error("rtxmc shaderc/pipeline smoke-test threw", t);
         }
     }
 
