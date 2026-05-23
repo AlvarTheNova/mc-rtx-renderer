@@ -185,11 +185,24 @@ Realistic subdivision — original "Phase 1" was 2-3 months of work, not weeks.
 - [x] **Validated in-MC:** sampler created cleanly (h=0x1 returned by vkCreateSampler), JNI binding works, device-readiness guard prevents pre-rtx_init crashes
 - [ ] **Surfaced architectural blocker:** MC creates Tier-1-heavy resources (GUI buffers + atlas textures) DURING RenderSystem.initRenderer — BEFORE our rtx_init() fires from RtxMod.onWindowCreated. Shadow paths for buffer + texture observed but bailed early via device-guard. **Fix is 1.6.1c.**
 
-#### 1.6.1c — Init-order restructure + remaining Tier 1
-- [ ] Move rtx_init() to fire BEFORE RenderSystem.initRenderer (via a different hook point) so the shadow path captures real createBuffer + createTexture calls
-- [ ] `precompilePipeline` — runtime GLSL→SPIR-V via shaderc. RenderPipeline state → VkGraphicsPipeline translation.
+#### 1.6.1c — Init-order restructure  ✓ done
+- [x] Added `@Inject @At("HEAD")` to `RenderSystem.initRenderer` that fires `RtxMod.renderer().init()` BEFORE Mojang creates the first GpuBuffer/Texture
+- [x] `VulkanRenderer.init()` is idempotent — old MinecraftClientMixin TAIL call still fires but no-ops
+- [x] **Validated in-MC:** 12 distinct VK resources created cleanly during initRenderer (handles 0x1–0xb for buffers+textures, 0xc for sampler at world-load). All translation tables verified against real Mojang usage patterns.
+
+#### 1.6.1d — Pipeline compilation (GLSL → SPIR-V → VkGraphicsPipeline)
+- [ ] `precompilePipeline(RenderPipeline, ShaderSourceGetter)` — pull GLSL via ShaderSourceGetter, compile via shaderc, build VkGraphicsPipeline matching RenderPipeline state (blend, depth, cull, vertex format)
+- [ ] Wire `VkCompiledRenderPipeline implements CompiledRenderPipeline` to hold the VkPipeline handle
+- [ ] Cache pipelines by RenderPipeline.getLocation() so identical specs don't recompile
+
+#### 1.6.1e — CommandEncoder + RenderPass
 - [ ] `VkCommandEncoder implements CommandEncoder` — records into our existing per-frame VkCommandBuffer
 - [ ] `VkRenderPass implements RenderPass` — vkCmdBeginRendering / vkCmdSetPipeline / vkCmdDraw state machine
+- [ ] Frame timing tweak: open cmd buf at WorldRenderer.render HEAD (not in our existing rtx_render_frame which currently both opens and submits)
+- [ ] MC's HUD encoder/pass calls then record into our active cmd buf naturally
+
+#### 1.6.1f — Swap from shadow to real Vk* returns
+- [ ] VkBackend.createBuffer/Texture/Sampler return our Vk* instances instead of GL ones (no more shadow-discard)
 - [ ] Why all-at-once: incremental replacement requires consumers to handle mixed GL/VK resource types — tightly-coupled cluster.
 
 #### 1.6.1b — Buffer/texture/sampler primitives
