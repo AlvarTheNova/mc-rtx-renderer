@@ -42,4 +42,9 @@ public final class VkResNative {
                                             int minFilter, int magFilter,
                                             int maxAnisotropy);
     public static native void destroySampler(long handle);
+
+    /** Phase 1.6.1d shaderc smoke-test. Returns SPIR-V word count on success,
+     *  negative on failure (-1=compile error, -2=bad stage code).
+     *  stage: 0 = vertex, 1 = fragment. */
+    public static native int testCompileShader(String glsl, int stage, String label);
 }

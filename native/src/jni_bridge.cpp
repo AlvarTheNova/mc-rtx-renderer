@@ -1,6 +1,7 @@
 #include "jni_bridge.h"
 #include "rtx_renderer.h"
 #include "vk_resources.h"
+#include "vk_shaderc.h"
 
 #include <cstring>
 #include <cstdio>
@@ -169,4 +170,24 @@ Java_com_rtxmc_gpu_VkResNative_createSampler(JNIEnv*, jclass,
 extern "C" JNIEXPORT void JNICALL
 Java_com_rtxmc_gpu_VkResNative_destroySampler(JNIEnv*, jclass, jlong h) {
     rtxmc::vkres_destroy_sampler((uint64_t)h);
+}
+
+// ---- shaderc test entry point (1.6.1d) ------------------------------------
+// Compiles a GLSL source string to SPIR-V; returns the word count (or
+// negative on failure). Used by the Java side to smoke-test the shaderc
+// toolchain at startup. Returns -1 on compile error, -2 on bad stage.
+extern "C" JNIEXPORT jint JNICALL
+Java_com_rtxmc_gpu_VkResNative_testCompileShader(JNIEnv* env, jclass,
+                                                  jstring jsource, jint stage,
+                                                  jstring jlabel) {
+    if (stage < 0 || stage > 1) return -2;
+    const char* source = env->GetStringUTFChars(jsource, nullptr);
+    const char* label  = jlabel ? env->GetStringUTFChars(jlabel, nullptr) : "test";
+    auto spirv = rtxmc::shaderc_compile(
+            source ? source : "",
+            (rtxmc::ShaderStage)stage,
+            label);
+    if (source) env->ReleaseStringUTFChars(jsource, source);
+    if (jlabel && label) env->ReleaseStringUTFChars(jlabel, label);
+    return spirv.empty() ? -1 : (jint)spirv.size();
 }

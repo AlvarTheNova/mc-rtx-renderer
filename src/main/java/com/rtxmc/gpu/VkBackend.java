@@ -51,6 +51,25 @@ public final class VkBackend implements GpuDevice {
     public VkBackend(GpuDevice wrapped) {
         this.wrapped = wrapped;
         RtxMod.LOG.info("rtxmc VkBackend installed (wrapping {})", wrapped.getClass().getName());
+        rtxmc$shadercSmokeTest();
+    }
+
+    /** Phase 1.6.1d one-shot: compile a trivial vert+frag pair via shaderc
+     *  so we know the toolchain links + runs before anyone depends on it. */
+    private static void rtxmc$shadercSmokeTest() {
+        final String vert = "#version 450\nvoid main(){ gl_Position = vec4(0); }\n";
+        final String frag = "#version 450\nlayout(location=0) out vec4 c;\nvoid main(){ c = vec4(1); }\n";
+        try {
+            int vWords = VkResNative.testCompileShader(vert, 0, "smoke-test-vert");
+            int fWords = VkResNative.testCompileShader(frag, 1, "smoke-test-frag");
+            if (vWords > 0 && fWords > 0) {
+                RtxMod.LOG.info("rtxmc shaderc smoke-test ok: vert={} words, frag={} words", vWords, fWords);
+            } else {
+                RtxMod.LOG.error("rtxmc shaderc smoke-test FAILED: vWords={} fWords={}", vWords, fWords);
+            }
+        } catch (Throwable t) {
+            RtxMod.LOG.error("rtxmc shaderc smoke-test threw", t);
+        }
     }
 
     private int trace(String method) {

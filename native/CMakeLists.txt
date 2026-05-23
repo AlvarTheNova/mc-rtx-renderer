@@ -100,6 +100,7 @@ add_library(rtx_renderer SHARED
     src/chunk_renderer.cpp
     src/entity_renderer.cpp
     src/vk_resources.cpp
+    src/vk_shaderc.cpp
     src/atlas.cpp
     # Generated headers — listed as sources so cmake creates the dep edge.
     ${TRIANGLE_VERT_H}
