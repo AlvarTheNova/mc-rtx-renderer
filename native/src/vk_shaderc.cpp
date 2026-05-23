@@ -58,6 +58,15 @@ public:
         options_.SetTargetEnvironment(shaderc_target_env_vulkan,
                                       shaderc_env_version_vulkan_1_3);
         options_.SetTargetSpirv(shaderc_spirv_version_1_6);
+
+        // Phase 1.6.1d step 5 — Mojang's GLSL is GL-style: no explicit
+        // layout(binding=) on samplers/uniforms, no layout(location=) on
+        // in/out varyings. SPIR-V demands both. These flags tell shaderc
+        // to auto-assign them sequentially in declaration order. Java side
+        // will need to read these back via reflection if we ever care about
+        // exact slot numbers, but for now sequential is consistent.
+        options_.SetAutoBindUniforms(true);
+        options_.SetAutoMapLocations(true);
     }
 
     std::vector<uint32_t> compile(std::string_view glsl, ShaderStage stage,
